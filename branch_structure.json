@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/localstorage-chat-persistence",
+    "fix/case-contact-lookup-field-name",
+    "main"
+  ],
+  "parent": {
+    "feat/localstorage-chat-persistence": "main",
+    "fix/case-contact-lookup-field-name": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "feat/localstorage-chat-persistence",
+    "fix/case-contact-lookup-field-name"
+  ]
+}
