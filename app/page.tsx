@@ -1,20 +1,15 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import type { ToolUIPart } from "ai";
 import { CarIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Conversation,
   ConversationContent,
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
+import { Message, MessageContent } from "@/components/ai-elements/message";
 import {
   PromptInput,
   type PromptInputMessage,
@@ -22,13 +17,7 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
+import { MessagePart } from "@/components/chat/message-part";
 import { Button } from "@/components/ui/button";
 
 const SUGGESTIONS = [
@@ -37,70 +26,6 @@ const SUGGESTIONS = [
   "What's the delivery status for booking MAH-9921?",
   "I need to book a service for my Thar",
 ];
-
-/**
- * Its own component (not inlined in the message-parts map) for two reasons:
- * keeps `open` as a genuinely controlled prop — `defaultOpen` only sets
- * initial state, and `toolPart.state` changes on the same mounted
- * instance as a tool call progresses (input-streaming -> output-available),
- * which Base UI warns about ("changing the default open state ... after
- * being initialized", confirmed live) — and `setOpen` from `useState` is
- * already a stable function reference, so `onOpenChange={setOpen}` needs no
- * wrapper closure per render.
- */
-function ToolCard({ toolPart }: { toolPart: ToolUIPart }) {
-  const [open, setOpen] = useState(toolPart.state === "output-available");
-
-  useEffect(() => {
-    if (toolPart.state === "output-available") {
-      setOpen(true);
-    }
-  }, [toolPart.state]);
-
-  return (
-    <Tool onOpenChange={setOpen} open={open}>
-      <ToolHeader state={toolPart.state} type={toolPart.type} />
-      <ToolContent>
-        <ToolInput input={toolPart.input} />
-        <ToolOutput
-          errorText={toolPart.errorText}
-          output={
-            toolPart.output ? (
-              <MessageResponse>
-                {JSON.stringify(toolPart.output, null, 2)}
-              </MessageResponse>
-            ) : undefined
-          }
-        />
-      </ToolContent>
-    </Tool>
-  );
-}
-
-function MessagePart({
-  messageId,
-  messageRole,
-  part,
-}: {
-  messageId: string;
-  messageRole: string;
-  part: ReturnType<typeof useChat>["messages"][number]["parts"][number];
-}) {
-  if (part.type === "text") {
-    return (
-      <MessageResponse key={`${messageId}-text-${messageRole}`}>
-        {part.text}
-      </MessageResponse>
-    );
-  }
-
-  if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
-    const toolPart = part as ToolUIPart;
-    return <ToolCard key={toolPart.toolCallId} toolPart={toolPart} />;
-  }
-
-  return null;
-}
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
