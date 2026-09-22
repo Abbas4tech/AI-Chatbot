@@ -116,19 +116,23 @@ Local-only (`pnpm dev`), screen-recorded for the required 5–7 minute Loom walk
 
 ```mermaid
 flowchart TD
-    User[Browser: Chat UI, useChat holds\nmessage history client-side] -->|POST full message history each turn| API[Next.js API Route]
+    User[Browser: Chat UI, useChat holds\nmessage history client-side +\nmah-sid session cookie] -->|POST full message history each turn| API[Next.js API Route]
+    API -->|resolve/create session| Session[Session store: in-memory Map\nkeyed by mah-sid, stage slot bags]
     API -->|streamText + tools, stopWhen: stepCountIs(5)| LLM[Groq: openai/gpt-oss-120b via @ai-sdk/groq]
-    LLM -->|tool call| Tools[Tool layer: lookupVehicleModel, createLead,\nsearchDeal, updateDealFollowUp, searchBooking,\nsearchContactByPhone, createServiceCase]
-    Tools -->|OAuth REST| Zoho[Zoho CRM REST API]
+    LLM -->|tool call, model-chosen — no separate\nintent classifier| Tools[Tool layer: lookupVehicleModel, createLead,\nsearchDeal, updateDealFollowUp, searchBooking,\nsearchContactByPhone, createServiceCase]
+    Tools -.->|createLead/createServiceCase args, via\nslot interceptor| Session
+    Tools -->|OAuth REST, ky client, 5s timeout| Zoho[Zoho CRM REST API]
     Zoho --> Leads[(Leads)]
     Zoho --> Deals[(Deals / Potentials)]
     Zoho --> Cases[(Cases)]
     Zoho --> Contacts[(Contacts)]
 ```
 
-Single request lifecycle: browser sends the *full* message history (held client-side by `useChat` — see the note below) → Vercel AI SDK streams a response from Groq, invoking one or more tools as the model decides they're needed → tools call Zoho's REST API using a cached/proactively-refreshed access token → tool results feed back into the same streamed turn, and `stopWhen: stepCountIs(5)` lets the model continue past a tool call to actually phrase a reply, instead of stopping right after the call → UI renders incrementally as tokens and tool results arrive.
+Single request lifecycle: browser sends the *full* message history (held client-side by `useChat`) plus its `mah-sid` cookie → the route resolves/creates the session record → Vercel AI SDK streams a response from Groq, invoking one or more tools as the model decides they're needed (this *is* the intent routing — see ADR-0006, there's no separate classifier) → the slot interceptor (ADR-0010) writes `createLead`/`createServiceCase` arguments into that session's stage-scoped slot bag before the call, clearing it on a confirmed write → tools call Zoho's REST API via the shared `ky` client using a cached/proactively-refreshed access token, hard-capped at 5s per call → tool results feed back into the same streamed turn, and `stopWhen: stepCountIs(5)` lets the model continue past a tool call to actually phrase a reply, instead of stopping right after the call → UI renders incrementally as tokens and tool results arrive.
 
-**Implementation note — refining ADR-0003's "session store" during scaffolding**: ADR-0003 specifies "in-memory, per-process, keyed by a session cookie." In practice, `useChat`'s default transport already resends the complete message history from client-side React state on every request — building a redundant server-side `Map` to hold the same history would duplicate what the client already holds, for no benefit. The substantive part of ADR-0003 (no database, ephemeral, resets on reload) is satisfied by this client-held state; the "server-side Map" detail was a reasonable *guess* at implementation before any code existed and turned out to be unnecessary, not a decision this refinement reverses. The one genuinely server-side in-memory state is the Zoho OAuth access-token cache in `lib/zoho/client.ts` — but that's a single module-level value shared by the whole app instance, not scoped per chat session.
+**Implementation note — ADR-0003's "session store" was refined, then actually built (ADR-0010)**: ADR-0003 specifies "in-memory, per-process, keyed by a session cookie." Early in scaffolding, this note argued that detail was unnecessary — `useChat` already resends the full message history, so a redundant server-side `Map` of the same history would add nothing. That reasoning was correct as far as it went, but it only considered *message history*. It missed a distinct need: an authoritative server-side record of *partial slot progress* while the model is mid-way through collecting a Lead's or Service Case's required fields (e.g. name + phone captured, email still missing) — that state doesn't live anywhere durable in the message array itself, and matters for the BRD's explicit "maintain conversational history and session state" requirement (§3) and the rubric's "state persistence across turns" sub-criterion (§6, 30% weight).
+
+ADR-0010 builds exactly the server-side `Map` this note originally waved off — but scoped to stage slot bags, not message history: `lib/session/store.ts` holds `Map<string, Session>` keyed by an HTTP-only `mah-sid` cookie, and `lib/session/interceptor.ts` writes into it whenever `createLead`/`createServiceCase` is called, clearing it on a confirmed write. `useChat`'s client-held message history is still the only copy of the conversation transcript — that part of this note's original reasoning stands. The Zoho OAuth access-token cache in `lib/zoho/client.ts` remains a separate, app-instance-wide value, not scoped per chat session. See [ADR-0010](./adr/0010-session-store-slot-state-ky-http-client.md) for the full design.
 
 ## 10. Rubric alignment map
 

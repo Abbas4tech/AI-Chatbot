@@ -8,6 +8,60 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0011).
 
+## Architecture
+
+```mermaid
+flowchart TD
+    Browser["Browser — useChat()\nmessage history in React state\nmah-sid session cookie (HTTP-only)"]
+    Route["Next.js API route\n/api/chat"]
+    Session["Session store (lib/session/store.ts)\nin-memory Map, keyed by mah-sid\nper-stage slot bags: lead / service"]
+    Interceptor["Slot interceptor (lib/session/interceptor.ts)\nwraps createLead / createServiceCase execute()"]
+    LLM["Groq — openai/gpt-oss-120b\nvia @ai-sdk/groq, streamText\nstopWhen: stepCountIs(5)"]
+    Tools["Tool layer (lib/tools/*)\nlookupVehicleModel · createLead · searchDeal\nupdateDealFollowUp · searchBooking\nsearchContactByPhone · createServiceCase"]
+    ZohoClient["Zoho REST client (lib/zoho/client.ts)\nky, 5s timeout, cached/refreshed OAuth token"]
+    Zoho["Zoho CRM REST API v8"]
+    Leads[("Leads")]
+    Deals[("Deals / Potentials\n(Booking = Deal stage\nClosed Won - Booking Done)")]
+    Cases[("Cases")]
+    Contacts[("Contacts")]
+
+    Browser -->|"POST full message history\n+ mah-sid cookie"| Route
+    Route -->|"resolve/create session"| Session
+    Route -->|"messages + tools + system prompt"| LLM
+    LLM -->|"model picks a tool\n(intent classification happens here —\nno separate router, the LLM IS the router)"| Tools
+    Tools -.->|"createLead / createServiceCase args"| Interceptor
+    Interceptor -->|"write slot bag"| Session
+    Tools -->|"OAuth REST call"| ZohoClient
+    ZohoClient --> Zoho
+    Zoho --> Leads
+    Zoho --> Deals
+    Zoho --> Cases
+    Zoho --> Contacts
+    Tools -->|"tool result"| LLM
+    LLM -->|"SSE stream: text + tool UI parts"| Browser
+```
+
+**Request lifecycle, one message at a time:**
+
+1. Browser sends the *entire* conversation history (held client-side by `useChat`) plus the `mah-sid` session cookie to `POST /api/chat`.
+2. The route resolves the session — creates one and sets the cookie on the first message, looks it up on every message after.
+3. `streamText` (Vercel AI SDK) sends the history, the 7-tool schema, and the OEM system prompt to Groq. **There is no separate intent-classification step** — the LLM itself decides which of the 7 tools (if any) the message needs, which *is* the routing layer the BRD's lifecycle matrix (§2) describes.
+4. If the model calls `createLead` or `createServiceCase`, the slot interceptor writes the validated arguments into that session's stage-scoped slot bag *before* the CRM call — so partial progress (e.g. name + phone collected, email still missing) is recoverable server-side, not just implied by scrollback.
+5. Tools that touch Zoho go through the shared `ky` client: cached OAuth access token (proactively refreshed), 5-second hard timeout per call so a hung Zoho request can't eat the whole streaming budget.
+6. On a confirmed write (`{ success: true }`), the interceptor clears that stage's slot bag — the next collection starts clean.
+7. Tool results flow back into the same streamed turn (`stopWhen: stepCountIs(5)` lets the model continue past a tool call to actually phrase a reply), and the UI renders text + tool-call cards incrementally as they arrive.
+
+**Stage → tool → Zoho module routing** (BRD §2):
+
+| Stage | Trigger | Tool(s) | Zoho module |
+| :---- | :---- | :---- | :---- |
+| 1. New Lead | Spec/pricing question from an unidentified visitor | `lookupVehicleModel` → `createLead` | Leads |
+| 2. Ongoing Pipeline | Phone/Deal ID to check status or update follow-up | `searchDeal`, `updateDealFollowUp` | Deals |
+| 3. Booked Vehicle | Booking ID/phone to check delivery/allocation | `searchBooking` | Deals (stage = `Closed Won - Booking Done`) |
+| 4. Post-Purchase/Service | Complaint or service booking from an owner | `searchContactByPhone`, `createServiceCase` | Cases, linked to Contacts |
+
+Full architectural reasoning and trade-offs for every decision above live in [`docs/adr/`](./docs/adr/) — particularly [ADR-0002](./docs/adr/0002-groq-vercel-ai-sdk-orchestration.md) (orchestration choice), [ADR-0006](./docs/adr/0006-llm-native-intent-routing.md) (why routing is LLM-native, not a separate classifier), [ADR-0009](./docs/adr/0009-groq-as-llm-provider.md) (LLM provider), and [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (session store, slot state, `ky`).
+
 ## Environment setup
 
 Copy `.env.example` to `.env.local` and fill in:
@@ -64,8 +118,13 @@ app/
   page.tsx            Thin entry point binding useChat state to ChatContainer
   api/chat/route.ts   Backend route: streamText, session resolution, tool slot interceptor
 components/
-  chat/               SOLID chat UI components (ChatContainer, ChatHeader, ChatEmptyState,
-                       ChatMessageList, MessagePart, ToolCard)
+  chat/               SOLID chat UI components, each single-responsibility:
+                       chat-container.tsx    layout shell + prompt input wiring
+                       chat-header.tsx       branding header (presentational)
+                       chat-empty-state.tsx  empty hero + starter suggestion chips
+                       chat-message-list.tsx scrollable message list
+                       message-part.tsx      per-part (text vs. tool-call) dispatch
+                       tool-card.tsx         tool-call status/args/result display
   ai-elements/        Conversation, Message, PromptInput, Tool, Suggestion, code-block
   ui/                 shadcn/ui primitives
 lib/
