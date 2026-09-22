@@ -1,24 +1,20 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { ZohoApiError, zoho } from "@/lib/zoho/client";
+import { withZohoErrorHandling } from "@/lib/tools/shared/handle-zoho-error";
+import { zoho } from "@/lib/zoho/client";
+import { ZOHO_MODULES } from "@/lib/zoho/constants";
 
 /** Stage 2 (Ongoing Pipeline) -> Zoho Deals. See docs/PRD.md §4-5. */
 export const updateDealFollowUp = tool({
   description:
     "Persist an updated follow-up preference on a Deal already found via searchDeal (Stage 2: Ongoing Pipeline).",
-  execute: async ({ dealId, followUpPreference }) => {
-    try {
-      await zoho.updateRecord("Deals", dealId, {
+  execute: ({ dealId, followUpPreference }) =>
+    withZohoErrorHandling(async () => {
+      await zoho.updateRecord(ZOHO_MODULES.DEALS, dealId, {
         Follow_Up_Preference: followUpPreference,
       });
       return { success: true };
-    } catch (error) {
-      if (error instanceof ZohoApiError) {
-        return { error: error.message, success: false };
-      }
-      throw error;
-    }
-  },
+    }),
   inputSchema: z.object({
     dealId: z.string(),
     followUpPreference: z

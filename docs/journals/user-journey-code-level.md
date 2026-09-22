@@ -16,7 +16,7 @@ sequenceDiagram
     participant SS as lib/session/store.ts
     participant I as Slot Interceptor
     participant T as lib/tools/*
-    participant K as ky (lib/zoho/client.ts)
+    participant K as ky (lib/zoho/http.ts)
     participant Z as Zoho CRM API
 
     Note over B,Z: Turn 1 — "Hi, I'm Rajan, interested in XUV700"
@@ -243,29 +243,33 @@ function wrapWithSlotInterceptor(
 
 ---
 
-### Layer 4 — `lib/zoho/client.ts` (ky replacement)
+### Layer 4 — `lib/zoho/*` (ky replacement)
+
+As of [ADR-0012](./adr/0012-zoho-client-split-and-tool-dedup.md), this layer is
+split by responsibility rather than one file — the trace below shows which
+file each piece actually lives in.
 
 ```ts
-import ky from "ky";
-
-// One shared instance per process — token injected via beforeRequest hook.
-const zohoApi = ky.create({
-  prefixUrl: `https://www.zohoapis.${dc}/crm/v8`,
+// lib/zoho/http.ts — one shared ky instance per process, token injected via
+// beforeRequest hook. requiredEnv/getAccessToken imported from helpers.ts.
+const zohoApi = ky.extend({
+  baseUrl: `https://www.zohoapis.${dc}/crm/v8/`,
   timeout: 5_000,   // hard 5s ceiling per Zoho call
   headers: { "Content-Type": "application/json" },
   hooks: {
     beforeRequest: [
-      async (request) => {
-        const token = await getAccessToken(); // existing cache + refresh unchanged
+      async ({ request }) => {
+        const token = await getAccessToken(); // lib/zoho/helpers.ts — cache + refresh
         request.headers.set("Authorization", `Zoho-oauthtoken ${token}`);
       },
     ],
   },
 });
 
-// Token refresh uses a separate one-off ky call (different base URL).
+// lib/zoho/helpers.ts — token refresh uses a separate one-off ky call
+// (different base URL); tokenCache is module-level state private to this file.
 async function getAccessToken(): Promise<string> {
-  if (tokenCache && tokenCache.expiresAt - REFRESH_MARGIN_MS > Date.now()) {
+  if (tokenCache && tokenCache.expiresAt - TOKEN_REFRESH_MARGIN_MS > Date.now()) {
     return tokenCache.accessToken;
   }
   const data = await ky
@@ -275,10 +279,16 @@ async function getAccessToken(): Promise<string> {
     })
     .json<{ access_token?: string; expires_in?: number; error?: string }>();
 
-  if (!data.access_token) throw new ZohoAuthError(data.error ?? "unknown");
+  if (!data.access_token) throw new ZohoAuthError(data.error ?? "unknown"); // lib/zoho/errors.ts
   tokenCache = { accessToken: data.access_token, expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000 };
   return tokenCache.accessToken;
 }
+
+// lib/zoho/client.ts — the only file tools import from. Public facade:
+// `zoho.{createRecord,searchRecords,updateRecord}` + `criteria`, both built
+// on `zohoRequest()` from http.ts. Module names (`ZOHO_MODULES.LEADS`, etc.)
+// come from constants.ts; ZohoApiError is imported from errors.ts directly
+// by tool files, not re-exported through client.ts.
 ```
 
 ---

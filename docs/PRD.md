@@ -83,7 +83,7 @@ This is the concrete tool set [ADR-0006](./adr/0006-llm-native-intent-routing.md
 
 The Contact gap flagged during planning (§11 originally) is resolved as **Option B** from that note: `createServiceCase` is self-contained rather than depending on a separately-seeded Contact or a prior tool call succeeding — more resilient to the model skipping a step, which is exactly what the rubric's "edge-case recovery" criterion rewards.
 
-Every Zoho-backed tool shares one authenticated client (§13) that handles access-token refresh transparently — tools themselves never see raw OAuth mechanics. Implementation lives in `lib/tools/*.ts`; the underlying client in `lib/zoho/client.ts`.
+Every Zoho-backed tool shares one authenticated client (§13) that handles access-token refresh transparently — tools themselves never see raw OAuth mechanics. Implementation lives in `lib/tools/*.ts` (cross-tool helpers in `lib/tools/shared/`); the client is split by responsibility under `lib/zoho/` — `client.ts` is the public facade, internals live in `http.ts`/`helpers.ts`/`errors.ts`/`types.ts`/`constants.ts` — see [ADR-0012](./adr/0012-zoho-client-split-and-tool-dedup.md).
 
 ## 6. Non-functional requirements
 
@@ -108,7 +108,7 @@ Local-only (`pnpm dev`), screen-recorded for the required 5–7 minute Loom walk
 | Setup script(s) | ✅ Done | [`scripts/seed-zoho-mock-data.sh`](../scripts/seed-zoho-mock-data.sh) (also `pnpm seed:zoho`) |
 | Architecture diagram | ✅ Done | §9 below (Mermaid) |
 | Demo Loom (5–7 min) | ⬜ Ready | App is functionally ready; provider latency issue resolved; full test scenarios and code traces documented in `docs/journals/` |
-| ADRs for hard-to-reverse decisions | ✅ Done | [`docs/adr/`](./adr/) — 11 ADRs (0001 through 0011) |
+| ADRs for hard-to-reverse decisions | ✅ Done | [`docs/adr/`](./adr/) — 12 ADRs (0001 through 0012) |
 | Domain glossary | ✅ Done | [`CONTEXT.md`](../CONTEXT.md) |
 
 
@@ -132,7 +132,7 @@ Single request lifecycle: browser sends the *full* message history (held client-
 
 **Implementation note — ADR-0003's "session store" was refined, then actually built (ADR-0010)**: ADR-0003 specifies "in-memory, per-process, keyed by a session cookie." Early in scaffolding, this note argued that detail was unnecessary — `useChat` already resends the full message history, so a redundant server-side `Map` of the same history would add nothing. That reasoning was correct as far as it went, but it only considered *message history*. It missed a distinct need: an authoritative server-side record of *partial slot progress* while the model is mid-way through collecting a Lead's or Service Case's required fields (e.g. name + phone captured, email still missing) — that state doesn't live anywhere durable in the message array itself, and matters for the BRD's explicit "maintain conversational history and session state" requirement (§3) and the rubric's "state persistence across turns" sub-criterion (§6, 30% weight).
 
-ADR-0010 builds exactly the server-side `Map` this note originally waved off — but scoped to stage slot bags, not message history: `lib/session/store.ts` holds `Map<string, Session>` keyed by an HTTP-only `mah-sid` cookie, and `lib/session/interceptor.ts` writes into it whenever `createLead`/`createServiceCase` is called, clearing it on a confirmed write. `useChat`'s client-held message history is still the only copy of the conversation transcript — that part of this note's original reasoning stands. The Zoho OAuth access-token cache in `lib/zoho/client.ts` remains a separate, app-instance-wide value, not scoped per chat session. See [ADR-0010](./adr/0010-session-store-slot-state-ky-http-client.md) for the full design.
+ADR-0010 builds exactly the server-side `Map` this note originally waved off — but scoped to stage slot bags, not message history: `lib/session/store.ts` holds `Map<string, Session>` keyed by an HTTP-only `mah-sid` cookie, and `lib/session/interceptor.ts` writes into it whenever `createLead`/`createServiceCase` is called, clearing it on a confirmed write. `useChat`'s client-held message history is still the only copy of the conversation transcript — that part of this note's original reasoning stands. The Zoho OAuth access-token cache in `lib/zoho/helpers.ts` remains a separate, app-instance-wide value, not scoped per chat session. See [ADR-0010](./adr/0010-session-store-slot-state-ky-http-client.md) for the full design.
 
 ## 10. Rubric alignment map
 

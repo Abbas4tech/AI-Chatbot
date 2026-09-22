@@ -1,30 +1,30 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { criteria, ZohoApiError, zoho } from "@/lib/zoho/client";
+import { withZohoErrorHandling } from "@/lib/tools/shared/handle-zoho-error";
+import { criteria, zoho } from "@/lib/zoho/client";
+import { DEAL_STAGES, ZOHO_MODULES } from "@/lib/zoho/constants";
 
 /**
  * Stage 3 (Booked Vehicle) -> Zoho Deals filtered to the booking Stage.
  * Booking is modeled as a Deal, not a separate module — see
  * docs/adr/0005-booking-as-deal-stage.md.
  */
-const BOOKING_STAGE = "Closed Won - Booking Done";
-
 export const searchBooking = tool({
   description:
     "Find a booked vehicle (Stage 3: Booked Vehicle) by Booking ID or phone number. Reports allocation " +
     "stage, VIN (if assigned yet), and the booking amount.",
-  execute: async ({ bookingId, phone }) => {
-    try {
+  execute: ({ bookingId, phone }) =>
+    withZohoErrorHandling(async () => {
       let deals: Awaited<ReturnType<typeof zoho.searchRecords>> | null = null;
 
       if (bookingId) {
         deals = await zoho.searchRecords(
-          "Deals",
+          ZOHO_MODULES.DEALS,
           criteria.equals("Booking_ID", bookingId)
         );
       } else if (phone) {
         deals = await zoho.searchRecords(
-          "Deals",
+          ZOHO_MODULES.DEALS,
           criteria.equals("Customer_Phone", phone)
         );
       }
@@ -37,7 +37,9 @@ export const searchBooking = tool({
         };
       }
 
-      const bookings = deals.filter((deal) => deal.Stage === BOOKING_STAGE);
+      const bookings = deals.filter(
+        (deal) => deal.Stage === DEAL_STAGES.BOOKING
+      );
       if (bookings.length === 0) {
         return {
           bookings: [],
@@ -47,13 +49,7 @@ export const searchBooking = tool({
         };
       }
       return { bookings, success: true };
-    } catch (error) {
-      if (error instanceof ZohoApiError) {
-        return { error: error.message, success: false };
-      }
-      throw error;
-    }
-  },
+    }),
   inputSchema: z.object({
     bookingId: z.string().optional(),
     phone: z.string().optional(),

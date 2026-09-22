@@ -149,4 +149,7 @@ with its own 5-second timeout and does not share the CRM instance.
 session-persistence section of 0003 ·
 [ADR-0006](./0006-llm-native-intent-routing.md) — tool routing; the interceptor sits
 above the same dispatch ·
-[BRD §3](../resources/FDE%20Candidate%20Assessment%20BRD%20.md)
+[BRD §3](../resources/FDE%20Candidate%20Assessment%20BRD%20.md) ·
+[ADR-0012](./0012-zoho-client-split-and-tool-dedup.md) — later splits the single
+`lib/zoho/client.ts` this ADR introduced into responsibility-scoped files; the
+`ky`/timeout/token-refresh decisions made here are unchanged

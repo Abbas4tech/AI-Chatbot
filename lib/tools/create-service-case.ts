@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { criteria, ZohoApiError, zoho } from "@/lib/zoho/client";
+import { withZohoErrorHandling } from "@/lib/tools/shared/handle-zoho-error";
+import { splitFullName } from "@/lib/tools/shared/split-full-name";
+import { criteria, zoho } from "@/lib/zoho/client";
+import { ZOHO_MODULES } from "@/lib/zoho/constants";
 
 /**
  * Stage 4 (Post-Purchase/Service) -> Zoho Cases, linked to an existing Contact.
@@ -13,14 +16,12 @@ import { criteria, ZohoApiError, zoho } from "@/lib/zoho/client";
  * step (the rubric's "edge-case recovery" criterion) than relying on
  * multi-tool chaining to succeed every time.
  */
-const WHITESPACE_RE = /\s+/;
-
 export const createServiceCase = tool({
   description:
     "File a service/complaint Case (Stage 4: Post-Purchase/Service) for an existing owner. Finds or " +
     "creates the owner's Contact record by phone automatically — you do not need to call " +
     "searchContactByPhone first.",
-  execute: async ({
+  execute: ({
     fullName,
     phone,
     registrationNumber,
@@ -28,25 +29,25 @@ export const createServiceCase = tool({
     issueDescription,
     serviceType,
     preferredCenter,
-  }) => {
-    try {
+  }) =>
+    withZohoErrorHandling(async () => {
       const existing = await zoho.searchRecords(
-        "Contacts",
+        ZOHO_MODULES.CONTACTS,
         criteria.equals("Phone", phone)
       );
       let contactId = existing[0]?.id as string | undefined;
 
       if (!contactId) {
-        const [firstName, ...rest] = fullName.trim().split(WHITESPACE_RE);
-        const created = await zoho.createRecord("Contacts", {
-          First_Name: rest.length > 0 ? firstName : undefined,
-          Last_Name: rest.length > 0 ? rest.join(" ") : firstName,
+        const { firstName, lastName } = splitFullName(fullName);
+        const created = await zoho.createRecord(ZOHO_MODULES.CONTACTS, {
+          First_Name: firstName,
+          Last_Name: lastName,
           Phone: phone,
         });
         contactId = created.id;
       }
 
-      const { id: caseId } = await zoho.createRecord("Cases", {
+      const { id: caseId } = await zoho.createRecord(ZOHO_MODULES.CASES, {
         Contact_Name: { id: contactId },
         Description: issueDescription,
         Odometer_Reading: odometerReading,
@@ -56,13 +57,7 @@ export const createServiceCase = tool({
       });
 
       return { caseId, contactId, success: true, wasNewContact: !existing[0] };
-    } catch (error) {
-      if (error instanceof ZohoApiError) {
-        return { error: error.message, success: false };
-      }
-      throw error;
-    }
-  },
+    }),
   inputSchema: z.object({
     fullName: z.string().describe("Owner's full name"),
     issueDescription: z

@@ -43,7 +43,7 @@ The per-stage collection of partially-gathered Slots for a Session. `stageSlots.
 _Avoid_: Form state, slot map.
 
 **Slot Interceptor**:
-A cross-cutting wrapper in `route.ts` that sits above every tool's `execute` function. It writes incoming tool arguments into the appropriate Slot Bag before the tool runs, and clears the Slot Bag if the tool returns `{ success: true }`. Individual tool files are not aware of its existence.
+A cross-cutting wrapper in `lib/session/interceptor.ts` (extracted from `route.ts` so the route stays focused on HTTP concerns) that sits above every tool's `execute` function. It writes incoming tool arguments into the appropriate Slot Bag before the tool runs, and clears the Slot Bag if the tool returns `{ success: true }`. Individual tool files are not aware of its existence.
 _Avoid_: Middleware (implies an HTTP layer; the Slot Interceptor operates at the tool-dispatch layer, not the HTTP layer).
 
 **Tool**:
@@ -59,6 +59,6 @@ The SOLID single-responsibility UI breakdown (`components/chat/*`) separating pa
 _Avoid_: Monolithic view component.
 
 **Ky HTTP Client**:
-The tiny, fetch-based HTTP client wrapper configured in `lib/zoho/client.ts` with transparent OAuth bearer token injection and hard per-request timeouts (5s). See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md).
+The tiny, fetch-based HTTP client wrapper configured in `lib/zoho/http.ts` with transparent OAuth bearer token injection and hard per-request timeouts (5s); `lib/zoho/client.ts` is the thin public facade over it. See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (the `ky` decision) and [ADR-0012](./docs/adr/0012-zoho-client-split-and-tool-dedup.md) (the file split).
 _Avoid_: Raw fetch wrapper.
 

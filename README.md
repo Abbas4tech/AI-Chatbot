@@ -6,7 +6,7 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0011).
+App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0012).
 
 ## Architecture
 
@@ -18,7 +18,7 @@ flowchart TD
     Interceptor["Slot interceptor (lib/session/interceptor.ts)\nwraps createLead / createServiceCase execute()"]
     LLM["Groq — openai/gpt-oss-120b\nvia @ai-sdk/groq, streamText\nstopWhen: stepCountIs(5)"]
     Tools["Tool layer (lib/tools/*)\nlookupVehicleModel · createLead · searchDeal\nupdateDealFollowUp · searchBooking\nsearchContactByPhone · createServiceCase"]
-    ZohoClient["Zoho REST client (lib/zoho/client.ts)\nky, 5s timeout, cached/refreshed OAuth token"]
+    ZohoClient["Zoho REST client (lib/zoho/*)\nky, 5s timeout, cached/refreshed OAuth token\nclient.ts facade over http.ts + helpers.ts"]
     Zoho["Zoho CRM REST API v8"]
     Leads[("Leads")]
     Deals[("Deals / Potentials\n(Booking = Deal stage\nClosed Won - Booking Done)")]
@@ -60,7 +60,7 @@ flowchart TD
 | 3. Booked Vehicle | Booking ID/phone to check delivery/allocation | `searchBooking` | Deals (stage = `Closed Won - Booking Done`) |
 | 4. Post-Purchase/Service | Complaint or service booking from an owner | `searchContactByPhone`, `createServiceCase` | Cases, linked to Contacts |
 
-Full architectural reasoning and trade-offs for every decision above live in [`docs/adr/`](./docs/adr/) — particularly [ADR-0002](./docs/adr/0002-groq-vercel-ai-sdk-orchestration.md) (orchestration choice), [ADR-0006](./docs/adr/0006-llm-native-intent-routing.md) (why routing is LLM-native, not a separate classifier), [ADR-0009](./docs/adr/0009-groq-as-llm-provider.md) (LLM provider), and [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (session store, slot state, `ky`).
+Full architectural reasoning and trade-offs for every decision above live in [`docs/adr/`](./docs/adr/) — particularly [ADR-0002](./docs/adr/0002-groq-vercel-ai-sdk-orchestration.md) (orchestration choice), [ADR-0006](./docs/adr/0006-llm-native-intent-routing.md) (why routing is LLM-native, not a separate classifier), [ADR-0009](./docs/adr/0009-groq-as-llm-provider.md) (LLM provider), [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (session store, slot state, `ky`), and [ADR-0012](./docs/adr/0012-zoho-client-split-and-tool-dedup.md) (`lib/zoho/` file layout, tool boilerplate dedup).
 
 ## Environment setup
 
@@ -131,12 +131,21 @@ lib/
   session/            Server-side session store (`store.ts`) & tool slot interceptor (`interceptor.ts`)
   system-prompt.ts    OEM domain system prompt (4-stage instructions)
   vehicle-catalog.ts  Local reference data backing lookupVehicleModel
-  zoho/client.ts      OAuth token management & Ky HTTP client for Zoho REST API
-  tools/*.ts          The 7 stage tools from docs/PRD.md §5
+  zoho/               Zoho REST client, split by responsibility (ADR-0012):
+                       client.ts   public facade — `zoho` object, `criteria`
+                       http.ts     ky instance + request/error-envelope wrapper
+                       helpers.ts  requiredEnv() + OAuth token cache/refresh
+                       errors.ts   ZohoApiError, ZohoAuthError
+                       types.ts    ZohoRecord, ZohoErrorEnvelope, TokenCache
+                       constants.ts  ZOHO_MODULES, DEAL_STAGES, refresh margin
+  tools/              The 7 stage tools from docs/PRD.md §5
+                       shared/     cross-tool helpers (ADR-0012):
+                                   handle-zoho-error.ts  withZohoErrorHandling()
+                                   split-full-name.ts    splitFullName()
 scripts/
   seed-zoho-mock-data.sh  Seeds the BRD-required mock CRM records
 docs/
   PRD.md              Full design reasoning & technical specifications
-  adr/                Architectural Decision Records (0001 - 0011)
+  adr/                Architectural Decision Records (0001 - 0012)
   journals/           Test scenarios & code-level user journeys
 ```
