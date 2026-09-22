@@ -21,9 +21,9 @@ import type { tools } from "@/lib/tools";
 function wrapExecute(
   name: string,
   sessionId: string,
-  execute: (args: unknown) => Promise<unknown>
+  execute: (args: unknown, options?: unknown) => Promise<unknown>
 ) {
-  return async (args: unknown) => {
+  return async (args: unknown, options?: unknown) => {
     // Write args into the slot bag before the CRM call. Args are already
     // Zod-validated by the AI SDK at this point so the cast is safe.
     if (name === "createLead") {
@@ -32,7 +32,9 @@ function wrapExecute(
       writeSlots(sessionId, "service", args as Partial<ServiceSlots>);
     }
 
-    const result = (await execute(args)) as { success?: boolean } | null;
+    const result = (await execute(args, options)) as {
+      success?: boolean;
+    } | null;
 
     // Clear the slot bag on a confirmed CRM write.
     if (result?.success === true) {
@@ -65,7 +67,8 @@ export function withSlotInterceptor(
         "createLead",
         sessionId,
         rawTools.createLead.execute as unknown as (
-          args: unknown
+          args: unknown,
+          options?: unknown
         ) => Promise<unknown>
       ) as never,
     },
@@ -75,7 +78,8 @@ export function withSlotInterceptor(
         "createServiceCase",
         sessionId,
         rawTools.createServiceCase.execute as unknown as (
-          args: unknown
+          args: unknown,
+          options?: unknown
         ) => Promise<unknown>
       ) as never,
     },

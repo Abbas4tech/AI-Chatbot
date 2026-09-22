@@ -6,7 +6,7 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live (not just anecdotally) that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update.
+App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0011).
 
 ## Environment setup
 
@@ -61,18 +61,23 @@ pnpm test       # Vitest
 
 ```
 app/
-  page.tsx            Chat UI (useChat + AI Elements components)
-  api/chat/route.ts    The only backend route: streamText + tool calling
+  page.tsx            Thin entry point binding useChat state to ChatContainer
+  api/chat/route.ts   Backend route: streamText, session resolution, tool slot interceptor
 components/
-  ai-elements/          Conversation, Message, PromptInput, Tool, Suggestion,
-                         code-block — the subset of the AI Elements registry
-                         this app actually uses; see docs/PRD.md §3a
-  ui/                    shadcn/ui primitives those depend on
+  chat/               SOLID chat UI components (ChatContainer, ChatHeader, ChatEmptyState,
+                       ChatMessageList, MessagePart, ToolCard)
+  ai-elements/        Conversation, Message, PromptInput, Tool, Suggestion, code-block
+  ui/                 shadcn/ui primitives
 lib/
-  system-prompt.ts     OEM domain system prompt (4-stage instructions)
-  vehicle-catalog.ts   Local reference data backing lookupVehicleModel
-  zoho/client.ts        OAuth token management + Zoho REST wrapper
-  tools/*.ts            The 7 tools from docs/PRD.md §5
+  session/            Server-side session store (`store.ts`) & tool slot interceptor (`interceptor.ts`)
+  system-prompt.ts    OEM domain system prompt (4-stage instructions)
+  vehicle-catalog.ts  Local reference data backing lookupVehicleModel
+  zoho/client.ts      OAuth token management & Ky HTTP client for Zoho REST API
+  tools/*.ts          The 7 stage tools from docs/PRD.md §5
 scripts/
-  seed-zoho-mock-data.sh   Seeds the BRD-required mock CRM records
+  seed-zoho-mock-data.sh  Seeds the BRD-required mock CRM records
+docs/
+  PRD.md              Full design reasoning & technical specifications
+  adr/                Architectural Decision Records (0001 - 0011)
+  journals/           Test scenarios & code-level user journeys
 ```

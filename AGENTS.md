@@ -146,3 +146,13 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm dlx ultracite fix` before committing to ensure compliance.
+
+## Mandatory Agent Verification Workflow
+
+Before concluding any turn or discussion, agents MUST ALWAYS run and verify:
+1. `pnpm fix` — auto-fix and format code issues (Ultracite / Biome)
+2. `pnpm test` (or `pnpm check`) — verify all Vitest unit tests pass cleanly
+3. `pnpm build` — verify TypeScript compilation (`tsc`) and Next.js production build
+
+Never report a task as complete without executing these commands to verify zero errors!
+

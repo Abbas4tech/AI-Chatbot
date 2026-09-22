@@ -102,14 +102,15 @@ Local-only (`pnpm dev`), screen-recorded for the required 5–7 minute Loom walk
 
 | Deliverable | Status | Notes |
 | :---- | :---- | :---- |
-| Private GitHub repo — modular code | 🟡 In progress | Next.js app scaffolded, all 4 stages' tools implemented (`lib/`, `app/`); not yet pushed/made private on GitHub |
-| `README.md` with execution steps | 🟡 In progress | Env/Zoho setup documented; "Running locally" section pending final pass |
+| Private GitHub repo — modular code | ✅ Done | Next.js app scaffolded and refactored with SOLID modular components (`components/chat/*`); pushed to GitHub |
+| `README.md` with execution steps | ✅ Done | Complete environment setup, seed commands, local execution, and project structure documented |
 | `.env.example` | ✅ Done | Repo root |
 | Setup script(s) | ✅ Done | [`scripts/seed-zoho-mock-data.sh`](../scripts/seed-zoho-mock-data.sh) (also `pnpm seed:zoho`) |
 | Architecture diagram | ✅ Done | §9 below (Mermaid) |
-| Demo Loom (5–7 min) | ⬜ Not started | App is functionally ready; provider latency issue resolved (§11) — remaining blocker is live-testing all 4 flows first (§12) |
-| ADRs for hard-to-reverse decisions | ✅ Done | [`docs/adr/`](./adr/) — 9 ADRs (0002 superseded by 0004, which is superseded by 0009) |
+| Demo Loom (5–7 min) | ⬜ Ready | App is functionally ready; provider latency issue resolved; full test scenarios and code traces documented in `docs/journals/` |
+| ADRs for hard-to-reverse decisions | ✅ Done | [`docs/adr/`](./adr/) — 11 ADRs (0001 through 0011) |
 | Domain glossary | ✅ Done | [`CONTEXT.md`](../CONTEXT.md) |
+
 
 ## 9. Architecture
 

@@ -53,3 +53,12 @@ _Avoid_: Action, function (function is the underlying mechanism; Tool is the cap
 **Self Client**:
 The non-interactive Zoho OAuth application type used for this server-to-server integration; yields a long-lived `refresh_token` without a redirect-URI login flow.
 _Avoid_: OAuth app (too generic — Zoho has other app types with different flows).
+
+**Modular Chat Architecture**:
+The SOLID single-responsibility UI breakdown (`components/chat/*`) separating page layout, header navigation, empty state hero, message list iteration, part rendering, and tool execution cards. See [ADR-0011](./docs/adr/0011-modular-chat-components-solid-refactor.md).
+_Avoid_: Monolithic view component.
+
+**Ky HTTP Client**:
+The tiny, fetch-based HTTP client wrapper configured in `lib/zoho/client.ts` with transparent OAuth bearer token injection and hard per-request timeouts (5s). See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md).
+_Avoid_: Raw fetch wrapper.
+
