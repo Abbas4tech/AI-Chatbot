@@ -1,4 +1,4 @@
-import { google } from "@ai-sdk/google";
+import { type GoogleInteractionsModelId, google } from "@ai-sdk/google";
 import {
   convertToModelMessages,
   stepCountIs,
@@ -20,7 +20,7 @@ export const maxDuration = 30;
  * session. ADR-0004 needs updating to reflect this; flagged to the user
  * rather than silently left undocumented.
  */
-const MODEL_ID = "gemini-flash-latest";
+const MODEL_ID: GoogleInteractionsModelId = "gemini-3.5-flash-lite";
 
 /**
  * The only route in the app. Conversation history is held client-side by

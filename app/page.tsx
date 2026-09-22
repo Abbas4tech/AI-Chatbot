@@ -1,13 +1,35 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import type { ToolUIPart } from "ai";
+import { CarIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  type PromptInputMessage,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from "@/components/ai-elements/prompt-input";
+import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 const SUGGESTIONS = [
   "What's the price of the XUV700?",
@@ -17,158 +39,157 @@ const SUGGESTIONS = [
 ];
 
 export default function ChatPage() {
-  const { messages, sendMessage, status, error, regenerate } = useChat();
   const [input, setInput] = useState("");
+  const { messages, sendMessage, status, error, regenerate } = useChat();
 
   const isBusy = status === "submitted" || status === "streaming";
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!input.trim() || isBusy) {
+  const handleSubmit = (message: PromptInputMessage) => {
+    if (!message.text.trim()) {
       return;
     }
-    sendMessage({ text: input });
+    sendMessage({ text: message.text });
     setInput("");
-  }
+  };
 
-  const handleSuggestionClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      const { suggestion } = e.currentTarget.dataset;
-      if (suggestion) {
-        sendMessage({ text: suggestion });
-      }
-    },
-    [sendMessage]
-  );
+  const handleSuggestionClick = (suggestion: string) => {
+    sendMessage({ text: suggestion });
+  };
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = () => {
     regenerate();
-  }, [regenerate]);
+  };
 
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInput(e.target.value);
-    },
-    []
-  );
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.currentTarget.value);
+  };
 
   return (
-    <div className="mx-auto flex h-dvh max-w-3xl flex-col p-4">
-      <header className="mb-4 border-b pb-4">
-        <h1 className="font-semibold text-xl">Mahindra AI Assistant</h1>
-        <p className="text-muted-foreground text-sm">
-          Ask about vehicles, check your booking, or log a service request.
-        </p>
+    <div className="mx-auto flex h-dvh max-w-3xl flex-col px-4 py-5 md:px-6 md:py-6">
+      <header className="mb-5 flex items-center gap-3 border-b pb-5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+          <CarIcon className="size-5" />
+        </div>
+        <div>
+          <h1 className="font-semibold text-2xl tracking-tight">
+            Mahindra AI Assistant
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Ask about vehicles, check your booking, or log a service request.
+          </p>
+        </div>
       </header>
 
-      <ScrollArea className="flex-1 pr-2">
-        {messages.length === 0 && (
-          <div className="grid gap-2 pt-4">
-            {SUGGESTIONS.map((suggestion) => (
-              <Button
-                className="h-auto justify-start whitespace-normal text-left"
-                data-suggestion={suggestion}
-                key={suggestion}
-                onClick={handleSuggestionClick}
-                variant="outline"
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </div>
-        )}
+      <Conversation className="min-h-0 flex-1">
+        <ConversationContent className="gap-8 p-2 md:p-4">
+          {messages.length === 0 ? (
+            <ConversationEmptyState
+              className="gap-4 py-16"
+              description="Ask about a vehicle, check a booking, or log a service request."
+              icon={<CarIcon className="size-10" />}
+              title="Start a conversation"
+            />
+          ) : (
+            messages.map((message) => (
+              <Message className="gap-3" from={message.role} key={message.id}>
+                <MessageContent className="text-base leading-relaxed group-[.is-user]:rounded-3xl group-[.is-user]:px-5 group-[.is-user]:py-3.5">
+                  {message.parts.map((part) => {
+                    if (part.type === "text") {
+                      return (
+                        <MessageResponse
+                          key={`${message.id}-text-${message.role}`}
+                        >
+                          {part.text}
+                        </MessageResponse>
+                      );
+                    }
 
-        <div className="flex flex-col gap-4 pb-4">
-          {messages.map((message) => (
-            <div
-              className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}
-              key={message.id}
-            >
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback>
-                  {message.role === "user" ? "You" : "AI"}
-                </AvatarFallback>
-              </Avatar>
+                    if (
+                      part.type.startsWith("tool-") ||
+                      part.type === "dynamic-tool"
+                    ) {
+                      const toolPart = part as ToolUIPart;
+                      return (
+                        <Tool
+                          defaultOpen={toolPart.state === "output-available"}
+                          key={toolPart.toolCallId}
+                        >
+                          <ToolHeader
+                            state={toolPart.state}
+                            type={toolPart.type}
+                          />
+                          <ToolContent>
+                            <ToolInput input={toolPart.input} />
+                            <ToolOutput
+                              errorText={toolPart.errorText}
+                              output={
+                                toolPart.output ? (
+                                  <MessageResponse>
+                                    {JSON.stringify(toolPart.output, null, 2)}
+                                  </MessageResponse>
+                                ) : undefined
+                              }
+                            />
+                          </ToolContent>
+                        </Tool>
+                      );
+                    }
 
-              <div
-                className={`flex max-w-[80%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
-              >
-                {message.parts.map((part) => {
-                  if (part.type === "text") {
-                    return (
-                      <Card
-                        className={`px-3 py-2 text-sm ${
-                          message.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                        key={`${message.id}-text-${message.role}`}
-                      >
-                        {part.text}
-                      </Card>
-                    );
-                  }
+                    return null;
+                  })}
+                </MessageContent>
+              </Message>
+            ))
+          )}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
-                  if (
-                    part.type.startsWith("tool-") ||
-                    part.type === "dynamic-tool"
-                  ) {
-                    const toolPart = part as unknown as {
-                      type: string;
-                      toolCallId: string;
-                      toolName?: string;
-                      state: string;
-                      output?: unknown;
-                    };
-                    const toolName =
-                      toolPart.toolName ?? part.type.replace("tool-", "");
-                    return (
-                      <Badge
-                        className="font-mono text-xs"
-                        key={toolPart.toolCallId}
-                        variant="secondary"
-                      >
-                        {toolName} · {toolPart.state}
-                      </Badge>
-                    );
-                  }
-
-                  return null;
-                })}
-              </div>
-            </div>
-          ))}
+      {error ? (
+        <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm">
+          <span>
+            Something went wrong reaching the assistant. This is usually
+            transient (e.g. the model provider under high load) — try again.
+          </span>
+          <Button
+            onClick={handleRetry}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Retry
+          </Button>
         </div>
+      ) : null}
 
-        {error ? (
-          <Card className="mb-4 flex items-center justify-between gap-3 border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-            <span>
-              Something went wrong reaching the assistant. This is usually
-              transient (e.g. the model provider under high load) — try again.
-            </span>
-            <Button
-              onClick={handleRetry}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              Retry
-            </Button>
-          </Card>
-        ) : null}
-      </ScrollArea>
+      {messages.length === 0 && (
+        <Suggestions className="mt-5 gap-2.5">
+          {SUGGESTIONS.map((suggestion) => (
+            <Suggestion
+              className="h-9 px-4 text-sm"
+              key={suggestion}
+              onClick={handleSuggestionClick}
+              size="lg"
+              suggestion={suggestion}
+            />
+          ))}
+        </Suggestions>
+      )}
 
-      <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
-        <Input
-          disabled={isBusy}
+      <PromptInput className="mt-5" onSubmit={handleSubmit}>
+        <PromptInputTextarea
+          className="min-h-[4.5rem] px-4 py-3.5 text-base md:text-base"
           onChange={handleInputChange}
           placeholder="Type your message..."
           value={input}
         />
-        <Button disabled={isBusy || !input.trim()} type="submit">
-          Send
-        </Button>
-      </form>
+        <PromptInputSubmit
+          className="mr-1.5 mb-1.5 size-9 rounded-full"
+          disabled={!input.trim() || isBusy}
+          size="icon-sm"
+          status={status}
+        />
+      </PromptInput>
     </div>
   );
 }

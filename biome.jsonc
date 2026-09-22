@@ -10,6 +10,20 @@
     // .agents/ is third-party Claude-skill content (see skills-lock.json),
     // not this project's code — it shouldn't be linted/formatted against
     // our rules regardless of its .gitignore status.
-    "includes": ["!.agents", "!skills-lock.json"]
+    //
+    // components/ai-elements/ and components/ui/ are vendored from the
+    // ai-elements and shadcn/ui registries (installed via their CLIs, not
+    // hand-authored here). They stay unlinted so pulling future registry
+    // updates doesn't fight our stricter Ultracite preset, and so we don't
+    // hand-edit complex library internals (e.g. Dialog's focus trap,
+    // Conversation's StickToBottom scroll logic) just to satisfy strictness
+    // preferences unrelated to real bugs. Our own code in app/ and lib/
+    // stays fully linted.
+    "includes": [
+      "!.agents",
+      "!skills-lock.json",
+      "!components/ai-elements",
+      "!components/ui"
+    ]
   }
 }

@@ -6,7 +6,7 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui), Vercel AI SDK + Gemini wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo (see [`docs/PRD.md` §11](./docs/PRD.md#11-assumptions--risks) for a known transient-availability issue with Gemini to be aware of when recording).
+App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Gemini wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo — **but read [`docs/PRD.md` §11](./docs/PRD.md#11-assumptions--risks) first**: Gemini's free tier has a confirmed hard cap of 20 requests/day, already exhausted once during development. Decide on Groq vs. a fresh-quota day before recording.
 
 ## Environment setup
 
@@ -61,8 +61,13 @@ pnpm test       # Vitest
 
 ```
 app/
-  page.tsx            Chat UI (useChat, shadcn/ui components)
+  page.tsx            Chat UI (useChat + AI Elements components)
   api/chat/route.ts    The only backend route: streamText + tool calling
+components/
+  ai-elements/          Conversation, Message, PromptInput, Tool, Suggestion,
+                         code-block — the subset of the AI Elements registry
+                         this app actually uses; see docs/PRD.md §3a
+  ui/                    shadcn/ui primitives those depend on
 lib/
   system-prompt.ts     OEM domain system prompt (4-stage instructions)
   vehicle-catalog.ts   Local reference data backing lookupVehicleModel
