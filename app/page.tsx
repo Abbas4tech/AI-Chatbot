@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import type { ToolUIPart } from "ai";
 import { CarIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Conversation,
   ConversationContent,
@@ -37,6 +37,70 @@ const SUGGESTIONS = [
   "What's the delivery status for booking MAH-9921?",
   "I need to book a service for my Thar",
 ];
+
+/**
+ * Its own component (not inlined in the message-parts map) for two reasons:
+ * keeps `open` as a genuinely controlled prop — `defaultOpen` only sets
+ * initial state, and `toolPart.state` changes on the same mounted
+ * instance as a tool call progresses (input-streaming -> output-available),
+ * which Base UI warns about ("changing the default open state ... after
+ * being initialized", confirmed live) — and `setOpen` from `useState` is
+ * already a stable function reference, so `onOpenChange={setOpen}` needs no
+ * wrapper closure per render.
+ */
+function ToolCard({ toolPart }: { toolPart: ToolUIPart }) {
+  const [open, setOpen] = useState(toolPart.state === "output-available");
+
+  useEffect(() => {
+    if (toolPart.state === "output-available") {
+      setOpen(true);
+    }
+  }, [toolPart.state]);
+
+  return (
+    <Tool onOpenChange={setOpen} open={open}>
+      <ToolHeader state={toolPart.state} type={toolPart.type} />
+      <ToolContent>
+        <ToolInput input={toolPart.input} />
+        <ToolOutput
+          errorText={toolPart.errorText}
+          output={
+            toolPart.output ? (
+              <MessageResponse>
+                {JSON.stringify(toolPart.output, null, 2)}
+              </MessageResponse>
+            ) : undefined
+          }
+        />
+      </ToolContent>
+    </Tool>
+  );
+}
+
+function MessagePart({
+  messageId,
+  messageRole,
+  part,
+}: {
+  messageId: string;
+  messageRole: string;
+  part: ReturnType<typeof useChat>["messages"][number]["parts"][number];
+}) {
+  if (part.type === "text") {
+    return (
+      <MessageResponse key={`${messageId}-text-${messageRole}`}>
+        {part.text}
+      </MessageResponse>
+    );
+  }
+
+  if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+    const toolPart = part as ToolUIPart;
+    return <ToolCard key={toolPart.toolCallId} toolPart={toolPart} />;
+  }
+
+  return null;
+}
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
@@ -93,50 +157,15 @@ export default function ChatPage() {
             messages.map((message) => (
               <Message className="gap-3" from={message.role} key={message.id}>
                 <MessageContent className="text-base leading-relaxed group-[.is-user]:rounded-3xl group-[.is-user]:px-5 group-[.is-user]:py-3.5">
-                  {message.parts.map((part) => {
-                    if (part.type === "text") {
-                      return (
-                        <MessageResponse
-                          key={`${message.id}-text-${message.role}`}
-                        >
-                          {part.text}
-                        </MessageResponse>
-                      );
-                    }
-
-                    if (
-                      part.type.startsWith("tool-") ||
-                      part.type === "dynamic-tool"
-                    ) {
-                      const toolPart = part as ToolUIPart;
-                      return (
-                        <Tool
-                          defaultOpen={toolPart.state === "output-available"}
-                          key={toolPart.toolCallId}
-                        >
-                          <ToolHeader
-                            state={toolPart.state}
-                            type={toolPart.type}
-                          />
-                          <ToolContent>
-                            <ToolInput input={toolPart.input} />
-                            <ToolOutput
-                              errorText={toolPart.errorText}
-                              output={
-                                toolPart.output ? (
-                                  <MessageResponse>
-                                    {JSON.stringify(toolPart.output, null, 2)}
-                                  </MessageResponse>
-                                ) : undefined
-                              }
-                            />
-                          </ToolContent>
-                        </Tool>
-                      );
-                    }
-
-                    return null;
-                  })}
+                  {message.parts.map((part, index) => (
+                    <MessagePart
+                      // biome-ignore lint/suspicious/noArrayIndexKey: parts have no stable id of their own; this array is append-only within a streaming message
+                      key={`${message.id}-part-${index}`}
+                      messageId={message.id}
+                      messageRole={message.role}
+                      part={part}
+                    />
+                  ))}
                 </MessageContent>
               </Message>
             ))

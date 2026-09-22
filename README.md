@@ -6,7 +6,7 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Gemini wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo — **but read [`docs/PRD.md` §11](./docs/PRD.md#11-assumptions--risks) first**: Gemini's free tier has a confirmed hard cap of 20 requests/day, already exhausted once during development. Decide on Groq vs. a fresh-quota day before recording.
+App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live (not just anecdotally) that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update.
 
 ## Environment setup
 
@@ -14,7 +14,7 @@ Copy `.env.example` to `.env.local` and fill in:
 
 | Variable | Where to get it |
 | :---- | :---- |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Free API key from [Google AI Studio](https://aistudio.google.com/api-keys). Not the same as a Gemini Advanced/Google One subscription — see [ADR-0004](./docs/adr/0004-gemini-pro-as-llm-provider.md). |
+| `GROQ_API_KEY` | Free API key from [console.groq.com/keys](https://console.groq.com/keys) — no card required. (Originally Gemini; switched — see [ADR-0004](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update for why.) |
 | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` | Create a **Self Client** at `api-console.zoho.<your-dc>` → Client Secret tab. |
 | `ZOHO_REFRESH_TOKEN` | From the same Self Client's **Generate Code** tab (scope `ZohoCRM.modules.ALL,ZohoCRM.settings.ALL`), exchanged for a refresh token via a one-time POST to `https://accounts.zoho.<dc>/oauth/v2/token`. Full walkthrough: [`docs/PRD.md` §13](./docs/PRD.md#13-credentials--environment-reference). |
 | `ZOHO_DC` | Your Zoho data center suffix (`com`, `in`, `eu`, ...) — visible in the API console's URL. |

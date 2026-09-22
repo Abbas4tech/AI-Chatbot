@@ -1,4 +1,4 @@
-import { type GoogleInteractionsModelId, google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import {
   convertToModelMessages,
   stepCountIs,
@@ -11,16 +11,22 @@ import { tools } from "@/lib/tools";
 export const maxDuration = 30;
 
 /**
- * "gemini-pro-latest" (the model ADR-0004 originally specified) hit a
- * RESOURCE_EXHAUSTED free-tier quota error on the very first live request
- * during scaffolding — its free-tier daily/per-minute allowance is
- * apparently near-zero. "gemini-flash-latest" is on the same API key (no
- * new credential/signup needed, unlike the ADR's documented Groq fallback)
- * and was verified working end-to-end, including tool calling, in the same
- * session. ADR-0004 needs updating to reflect this; flagged to the user
- * rather than silently left undocumented.
+ * Switched from Gemini to Groq — see docs/adr/0004-gemini-pro-as-llm-provider.md's
+ * final update for the full trail (Gemini's free tier repeatedly failed to
+ * produce a first token within 20s, confirmed live with a timestamped SSE
+ * trace, not guessed).
+ *
+ * "llama-3.3-70b-versatile" (ADR-0009's original choice, matching the BRD's
+ * own example) returned 404 model_not_found on the first live request —
+ * Groq's lineup moved on since the @ai-sdk/groq package's bundled type
+ * strings were published; the SDK's TypeScript types listing a model don't
+ * mean it's still live. Confirmed the actual current lineup by querying
+ * Groq's /openai/v1/models endpoint directly rather than guessing again.
+ * "openai/gpt-oss-120b": one of the few general-purpose (non-audio,
+ * non-moderation) chat models actually active on this account, large
+ * enough for reliable tool-argument extraction, still Groq-hosted.
  */
-const MODEL_ID: GoogleInteractionsModelId = "gemini-3.5-flash-lite";
+const MODEL_ID = "openai/gpt-oss-120b";
 
 /**
  * The only route in the app. Conversation history is held client-side by
@@ -34,12 +40,17 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
+    // Kept from the Gemini era even though Groq hasn't shown this failure
+    // mode in this session's testing — cheap insurance, not evidence Groq
+    // needs it. See docs/adr/0004-gemini-pro-as-llm-provider.md.
+    maxRetries: 0,
     messages: await convertToModelMessages(messages, { tools }),
-    model: google(MODEL_ID),
+    model: groq(MODEL_ID),
     // Without this, streamText stops right after a tool call instead of
     // continuing on to turn the tool's result into a reply for the customer.
     stopWhen: stepCountIs(5),
     system: SYSTEM_PROMPT,
+    timeout: 20_000,
     tools,
   });
 
