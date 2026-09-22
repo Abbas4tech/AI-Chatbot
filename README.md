@@ -6,7 +6,7 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-Foundation phase complete: tech stack, architecture, and CRM data model decided (see ADRs), Gemini and Zoho credentials obtained, Zoho custom schema created and mock data (BRD §4) seeded via script. Application code has not been scaffolded yet — this README will grow execution steps as that happens.
+App is scaffolded and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui), Vercel AI SDK + Gemini wired up, all 7 tools implemented against the live Zoho schema, `pnpm build`/`pnpm lint`/`pnpm test` all clean. Remaining before submission: push to a private GitHub repo and record the Loom demo (see [`docs/PRD.md` §11](./docs/PRD.md#11-assumptions--risks) for a known transient-availability issue with Gemini to be aware of when recording).
 
 ## Environment setup
 
@@ -26,8 +26,11 @@ Copy `.env.example` to `.env.local` and fill in:
 The app depends on a few fields beyond Zoho's stock Leads/Deals schema. **Before running the seed script**, add these manually in Zoho (Setup → Customization → Modules and Fields — full rationale in [`docs/adr/0005-booking-as-deal-stage.md`](./docs/adr/0005-booking-as-deal-stage.md)):
 
 - **Leads**: `Vehicle Model` (single line)
-- **Deals**: `Booking ID` (single line), `VIN` (single line), `Allocation Status` (picklist: `In Transit` / `Dispatch Pending` / `Delivered`), `Customer Phone` (single line)
+- **Deals**: `Booking ID` (single line), `VIN` (single line), `Allocation Status` (picklist: `In Transit` / `Dispatch Pending` / `Delivered`), `Customer Phone` (single line), `Follow Up Preference` (single line)
 - **Deals → Stage picklist**: add a new value `Closed Won - Booking Done` (same probability as `Closed Won`)
+- **Cases**: `Registration Number` (single line), `Odometer Reading` (number), `Preferred Service Center` (single line)
+
+All of the above were created via the Zoho Settings API rather than the UI in this project's own setup — see [`docs/PRD.md` §14](./docs/PRD.md#14-live-zoho-schema--mock-data-as-seeded) — but adding them by hand in the UI works identically.
 
 Then seed the three BRD-required mock records (Lead, active Deal, Booking Deal) via:
 
@@ -39,4 +42,31 @@ It reads Zoho credentials from `.env.local`, mints an access token, and creates 
 
 ## Running locally
 
-_To be filled in once the Next.js app is scaffolded._
+```sh
+pnpm install
+cp .env.example .env.local   # fill in real values — see Environment setup above
+pnpm dev                     # http://localhost:3000
+```
+
+Other useful commands:
+
+```sh
+pnpm build   # production build + typecheck
+pnpm lint    # ESLint
+pnpm test    # Vitest
+```
+
+## Project structure
+
+```
+app/
+  page.tsx            Chat UI (useChat, shadcn/ui components)
+  api/chat/route.ts    The only backend route: streamText + tool calling
+lib/
+  system-prompt.ts     OEM domain system prompt (4-stage instructions)
+  vehicle-catalog.ts   Local reference data backing lookupVehicleModel
+  zoho/client.ts        OAuth token management + Zoho REST wrapper
+  tools/*.ts            The 7 tools from docs/PRD.md §5
+scripts/
+  seed-zoho-mock-data.sh   Seeds the BRD-required mock CRM records
+```

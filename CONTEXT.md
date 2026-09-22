@@ -25,13 +25,13 @@ A post-purchase service or complaint record linked to an existing Contact. Maps 
 _Avoid_: Ticket, service ticket (the BRD uses "Cases / Service Tickets" interchangeably; we canonicalize on Zoho's actual module name).
 
 **Contact**:
-The record for a person who already owns or has ordered a vehicle — the identity a Case (and, implicitly, a won Deal/Booking) is linked to. Maps to Zoho's Contacts module.
-_Avoid_: Customer, owner (used informally elsewhere in this doc set, but "Contact" is the precise term when referring to the Zoho record itself). **Not yet seeded as mock data** — see the open gap noted in [`docs/PRD.md` §11](./docs/PRD.md#11-assumptions--risks).
+The record for a person who already owns or has ordered a vehicle — the identity a Case (and, implicitly, a won Deal/Booking) is linked to. Maps to Zoho's Contacts module. Resolved (found-or-created) by phone number automatically inside `createServiceCase` — see [`docs/PRD.md` §5](./docs/PRD.md#5-tool-inventory-proposed).
+_Avoid_: Customer, owner (used informally elsewhere in this doc set, but "Contact" is the precise term when referring to the Zoho record itself).
 
 ## Agent & integration
 
 **Session**:
-The in-memory, per-browser conversation state (message history + routing context), keyed by a session cookie and scoped to the dev-server process's lifetime — see [0003](./docs/adr/0003-zoho-rest-sync-in-memory-session.md).
+The conversation's message history and in-flight tool state, ephemeral and never persisted to a database — the substantive property [0003](./docs/adr/0003-zoho-rest-sync-in-memory-session.md) established. In the built app this is held client-side by `useChat`'s React state (resent in full each request) rather than a server-side store; see the implementation note in [`docs/PRD.md` §9](./docs/PRD.md#9-architecture).
 _Avoid_: Conversation (a Session includes routing/tool state, not just the message log).
 
 **Tool**:

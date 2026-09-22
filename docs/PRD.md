@@ -32,7 +32,7 @@ Build a conversational AI agent for an automotive OEM (Mahindra-style) that reco
 | Layer | Choice | Why | Decision record |
 | :---- | :---- | :---- | :---- |
 | Framework | Next.js (App Router), TypeScript | One deployable app — frontend + API routes — instead of two repos/services to run, configure, and keep in sync | [ADR-0001](./adr/0001-nextjs-fullstack-single-app.md) |
-| LLM provider | Gemini Pro (Google AI Studio, free tier) | User already holds a free-tier AI Studio key; no new signup, no cost, strong tool-calling | [ADR-0004](./adr/0004-gemini-pro-as-llm-provider.md) (supersedes [ADR-0002](./adr/0002-groq-vercel-ai-sdk-orchestration.md)) |
+| LLM provider | Gemini, via Google AI Studio free tier (`gemini-flash-latest` in code — `gemini-pro-latest` hit an immediate free-tier quota wall; see ADR-0004's update) | User already holds a free-tier AI Studio key; no new signup, no cost, strong tool-calling | [ADR-0004](./adr/0004-gemini-pro-as-llm-provider.md) (supersedes [ADR-0002](./adr/0002-groq-vercel-ai-sdk-orchestration.md)) |
 | Orchestration | Vercel AI SDK (`ai`, `@ai-sdk/google`) | Native streaming + tool calling, a `useChat` hook, and — as proven mid-project — a provider can be swapped without touching this layer | [ADR-0002](./adr/0002-groq-vercel-ai-sdk-orchestration.md) |
 | Intent routing | LLM-native tool selection, no separate classifier | The rubric's 30%-weighted criterion *is* tool-routing accuracy; a hand-rolled router in front of it would be graded instead of the thing being graded | [ADR-0006](./adr/0006-llm-native-intent-routing.md) |
 | CRM integration | Zoho CRM REST API v2/v8, OAuth 2.0 Self Client, REST-only sync | "Real-time" only needs to mean "live when asked," which a synchronous outbound call satisfies without inbound infrastructure | [ADR-0003](./adr/0003-zoho-rest-sync-in-memory-session.md) |
@@ -63,12 +63,12 @@ This is the concrete tool set [ADR-0006](./adr/0006-llm-native-intent-routing.md
 | `searchDeal` | Zoho `Deals`, filters on custom `Customer_Phone` or record ID | 2 | Find an in-pipeline deal by phone or Deal ID | `phone?`, `dealId?` |
 | `updateDealFollowUp` | Zoho `Deals` | 2 | Persist an updated follow-up preference on a matched deal | `dealId`, `followUpPreference` |
 | `searchBooking` | Zoho `Deals`, filtered to `Stage = "Closed Won – Booking Done"` and custom `Booking_ID`/`Customer_Phone` | 3 | Find a booking by Booking ID or phone; report allocation stage / VIN / payment status | `bookingId?`, `phone?` |
-| `searchContactByPhone` | Zoho `Contacts` | 3, 4 | Resolve an existing customer's Contact record before linking a Case or confirming identity | `phone` |
-| `createServiceCase` | Zoho `Cases` | 4 | File a service/complaint ticket linked to an existing Contact | `contactId`, `registrationNumber`, `odometerReading`, `issueDescription`, `serviceType`, `preferredCenter` |
+| `searchContactByPhone` | Zoho `Contacts` | 3, 4 | Resolve an existing customer's Contact record by phone, to confirm identity without necessarily filing a Case | `phone` |
+| `createServiceCase` | Zoho `Cases` + `Contacts` | 4 | File a service/complaint Case. Resolves the owner's Contact by phone internally — **creates one if it doesn't exist** — rather than requiring the model to chain `searchContactByPhone` first | `fullName`, `phone`, `registrationNumber`, `odometerReading`, `issueDescription`, `serviceType`, `preferredCenter` |
 
-⚠️ No mock Contact record exists yet, so these two tools can't be exercised end-to-end today — see the open gap in [§11](#11-assumptions--risks).
+The Contact gap flagged during planning (§11 originally) is resolved as **Option B** from that note: `createServiceCase` is self-contained rather than depending on a separately-seeded Contact or a prior tool call succeeding — more resilient to the model skipping a step, which is exactly what the rubric's "edge-case recovery" criterion rewards.
 
-Every Zoho-backed tool shares one authenticated client (§13) that handles access-token refresh transparently — tools themselves never see raw OAuth mechanics.
+Every Zoho-backed tool shares one authenticated client (§13) that handles access-token refresh transparently — tools themselves never see raw OAuth mechanics. Implementation lives in `lib/tools/*.ts`; the underlying client in `lib/zoho/client.ts`.
 
 ## 6. Non-functional requirements
 
@@ -87,12 +87,12 @@ Local-only (`pnpm dev`), screen-recorded for the required 5–7 minute Loom walk
 
 | Deliverable | Status | Notes |
 | :---- | :---- | :---- |
-| Private GitHub repo — modular code | ⬜ Not started | App not yet scaffolded (§12 item 4) |
-| `README.md` with execution steps | 🟡 In progress | Env/Zoho setup documented; "Running locally" pending scaffold |
+| Private GitHub repo — modular code | 🟡 In progress | Next.js app scaffolded, all 4 stages' tools implemented (`lib/`, `app/`); not yet pushed/made private on GitHub |
+| `README.md` with execution steps | 🟡 In progress | Env/Zoho setup documented; "Running locally" section pending final pass |
 | `.env.example` | ✅ Done | Repo root |
-| Setup script(s) | ✅ Done | [`scripts/seed-zoho-mock-data.sh`](../scripts/seed-zoho-mock-data.sh) |
-| Architecture diagram | ✅ Done | §9 below (Mermaid); will also be embedded in the README once app code exists |
-| Demo Loom (5–7 min) | ⬜ Not started | Blocked on scaffold + Contact gap (§11) for Stage 4 |
+| Setup script(s) | ✅ Done | [`scripts/seed-zoho-mock-data.sh`](../scripts/seed-zoho-mock-data.sh) (also `pnpm seed:zoho`) |
+| Architecture diagram | ✅ Done | §9 below (Mermaid) |
+| Demo Loom (5–7 min) | ⬜ Not started | App is functionally ready; blocked only on a stable window against Gemini's current `503`s (§11) |
 | ADRs for hard-to-reverse decisions | ✅ Done | [`docs/adr/`](./adr/) — 6 ADRs |
 | Domain glossary | ✅ Done | [`CONTEXT.md`](../CONTEXT.md) |
 
@@ -100,18 +100,19 @@ Local-only (`pnpm dev`), screen-recorded for the required 5–7 minute Loom walk
 
 ```mermaid
 flowchart TD
-    User[Browser: Chat UI] -->|useChat streaming| API[Next.js API Route]
-    API -->|streamText + tools| Gemini[Gemini Pro via @ai-sdk/google]
+    User[Browser: Chat UI, useChat holds\nmessage history client-side] -->|POST full message history each turn| API[Next.js API Route]
+    API -->|streamText + tools, stopWhen: stepCountIs(5)| Gemini[Gemini Flash via @ai-sdk/google]
     Gemini -->|tool call| Tools[Tool layer: lookupVehicleModel, createLead,\nsearchDeal, updateDealFollowUp, searchBooking,\nsearchContactByPhone, createServiceCase]
     Tools -->|OAuth REST| Zoho[Zoho CRM REST API]
     Zoho --> Leads[(Leads)]
     Zoho --> Deals[(Deals / Potentials)]
     Zoho --> Cases[(Cases)]
     Zoho --> Contacts[(Contacts)]
-    API -->|read/write| Session[(In-memory session store,\nkeyed by cookie)]
 ```
 
-Single request lifecycle: browser sends a message → API route loads session history from the in-memory store → Vercel AI SDK streams a Gemini response, invoking one or more tools as the model decides they're needed → tools call Zoho's REST API using a cached/proactively-refreshed access token → tool results feed back into the same streamed turn → UI renders incrementally as tokens and tool results arrive.
+Single request lifecycle: browser sends the *full* message history (held client-side by `useChat` — see the note below) → Vercel AI SDK streams a Gemini response, invoking one or more tools as the model decides they're needed → tools call Zoho's REST API using a cached/proactively-refreshed access token → tool results feed back into the same streamed turn, and `stopWhen: stepCountIs(5)` lets the model continue past a tool call to actually phrase a reply, instead of stopping right after the call → UI renders incrementally as tokens and tool results arrive.
+
+**Implementation note — refining ADR-0003's "session store" during scaffolding**: ADR-0003 specifies "in-memory, per-process, keyed by a session cookie." In practice, `useChat`'s default transport already resends the complete message history from client-side React state on every request — building a redundant server-side `Map` to hold the same history would duplicate what the client already holds, for no benefit. The substantive part of ADR-0003 (no database, ephemeral, resets on reload) is satisfied by this client-held state; the "server-side Map" detail was a reasonable *guess* at implementation before any code existed and turned out to be unnecessary, not a decision this refinement reverses. The one genuinely server-side in-memory state is the Zoho OAuth access-token cache in `lib/zoho/client.ts` — but that's a single module-level value shared by the whole app instance, not scoped per chat session.
 
 ## 10. Rubric alignment map
 
@@ -131,17 +132,16 @@ Explicit cross-reference from the grading rubric (BRD §6) to where each criteri
 - **Assumption**: Zoho's free developer tier's API call quota (~1000/day) is not a constraint for a single demo session. **Risk if wrong**: low — the demo is a handful of calls, not sustained load.
 - **Assumption**: The evaluator will run the app locally by following `README.md`, not expect a hosted link. **Risk if wrong**: revisit §7 (Vercel deploy was deliberately deferred, not ruled out).
 - **Risk**: Modeling Booking as a Deal stage ([ADR-0005](./adr/0005-booking-as-deal-stage.md)) means Deals and Bookings share one object type distinguished only by `Stage` — if the evaluator's rubric implementation specifically expects a separate custom module, this reads as a deliberate, documented trade-off rather than an oversight, which is the best mitigation available for an ambiguity the BRD itself introduced.
-- **Gap (open, needs a decision before Stage 4 can be demoed)**: §5's tool inventory defines `searchContactByPhone` and has `createServiceCase` require a `contactId`, but no mock **Contact** record has been created — the seed script (§14) only populates Leads and Deals. As it stands, Stage 4 (Post-Purchase/Service) has no existing owner to resolve during a demo. Two ways to close this, neither committed to yet:
-  1. Extend the seed script to also create a Contact (e.g. for the Booking's owner, "Vikram Nair"), linking the Booking Deal to it via Zoho's standard `Contact_Name` lookup field on Deals — the more realistic model, since a real booking would already be tied to a Contact.
-  2. Have `createServiceCase` create-a-Contact-if-missing at conversation time instead, matched by phone or registration number — closer to a real "new owner calls in for the first time" scenario, but adds a code path (and a rubric-relevant edge case) that needs its own error handling.
-  This will be resolved during scaffolding (§12 item 4), not in this planning session.
+- ~~**Gap**: no mock Contact record~~ — resolved during scaffolding: `createServiceCase` finds-or-creates its own Contact by phone (§5, "Option B" from the original note). No standalone Contact seeding needed.
+- **Known issue (external, not in our control)**: `gemini-flash-latest` (the model actually in use — see [ADR-0004](./adr/0004-gemini-pro-as-llm-provider.md)'s update) returned transient `503 UNAVAILABLE`/"high demand" errors from Google repeatedly while verifying the chat route, confirmed via direct `curl` against Google's API outside the app. One request did succeed end-to-end (tool call + correct result) before the 503s started. The UI now handles this gracefully (§9, error banner + retry via `useChat`'s `error`/`regenerate`), but be aware of it when recording the demo — if it's a sustained pattern rather than transient congestion, Groq is the documented fallback, not a redesign.
 
 ## 12. Open items / next steps
 
 1. ~~Zoho CRM Self Client setup~~ — done (§13).
 2. ~~Populate Zoho mock data~~ — done (§14).
 3. ~~Repo housekeeping~~ — `.gitignore` added, covering `.env.local` (was previously unprotected — a real risk given real credentials now exist on disk), `.agents/`, `skills-lock.json`. `AGENTS.md`/`docs/agents/*` left as-is for now, pending whether the GitHub-issue-tracker workflow they describe actually gets used for this project.
-4. Scaffold the Next.js app, wire up the tool layer (§5) against the live schema in §14, implement the 4 flows.
+4. ~~Scaffold the Next.js app, wire up the tool layer, implement the 4 flows~~ — done. Next.js (App Router, TS, Tailwind, shadcn/ui) scaffolded; Vercel AI SDK + `gemini-flash-latest` wired up (ADR-0004 update); all 7 tools from §5 implemented against the live Zoho schema (§14, now including 4 more fields discovered mid-implementation — `Follow_Up_Preference` on Deals, `Registration_Number`/`Odometer_Reading`/`Preferred_Service_Center` on Cases); chat UI with streaming, tool-call display, and error/retry handling; Vitest smoke tests pass; `pnpm build`/`pnpm lint` clean.
+5. Push to a private GitHub repo, record the Loom demo (blocked only on a stable window against Gemini's current `503`s — §11), draw the architecture diagram into the README.
 
 ## 13. Credentials & environment reference
 
@@ -175,9 +175,13 @@ Custom fields added beyond Zoho's stock Leads/Deals schema, confirmed via a read
 | Deals | VIN | `VIN` | text |
 | Deals | Booking ID | `Booking_ID` | text |
 | Deals | Allocation Status | `Allocation_Status` | picklist (`In Transit`, `Dispatch Pending`, `Delivered`) |
-| Deals | Customer Phone | `Customer_Phone` | text — added mid-session; standard Deals has no phone field, and both `searchDeal` and `searchBooking` (§5) need to filter by phone per the BRD's own trigger language |
+| Deals | Customer Phone | `Customer_Phone` | text — standard Deals has no phone field, and both `searchDeal` and `searchBooking` (§5) need to filter by phone per the BRD's own trigger language |
+| Deals | Follow Up Preference | `Follow_Up_Preference` | text — added while implementing `updateDealFollowUp` (§5) |
+| Cases | Registration Number | `Registration_Number` | text — added while implementing `createServiceCase` (§5) |
+| Cases | Odometer Reading | `Odometer_Reading` | integer — added while implementing `createServiceCase` (§5) |
+| Cases | Preferred Service Center | `Preferred_Service_Center` | text — added while implementing `createServiceCase` (§5) |
 
-Deals' `Stage` picklist also got one new value: `Closed Won - Booking Done` (§ADR-0005), same probability as the stock `Closed Won`.
+Deals' `Stage` picklist also got one new value: `Closed Won - Booking Done` (§ADR-0005), same probability as the stock `Closed Won`. Every field above was added via a read-verified Settings API call, never guessed from a label — see [§6](#6-non-functional-requirements)'s credential-handling pattern, reused here.
 
 Mock data seeded via [`scripts/seed-zoho-mock-data.sh`](../scripts/seed-zoho-mock-data.sh) (idempotent to re-run only if you intend duplicates):
 
