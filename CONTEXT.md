@@ -31,8 +31,20 @@ _Avoid_: Customer, owner (used informally elsewhere in this doc set, but "Contac
 ## Agent & integration
 
 **Session**:
-The conversation's message history and in-flight tool state, ephemeral and never persisted to a database — the substantive property [0003](./docs/adr/0003-zoho-rest-sync-in-memory-session.md) established. In the built app this is held client-side by `useChat`'s React state (resent in full each request) rather than a server-side store; see the implementation note in [`docs/PRD.md` §9](./docs/PRD.md#9-architecture).
-_Avoid_: Conversation (a Session includes routing/tool state, not just the message log).
+A server-side record keyed by an HTTP-only cookie (`mah-sid`) and held in an in-memory `Map` for the lifetime of the dev-server process. Holds stage-scoped Slot Bags — not the message log (which the client re-sends in full each turn). See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md).
+_Avoid_: Conversation (a Session includes slot/tool state, not just the message log).
+
+**Slot**:
+A single named field that the agent must collect before it can call a stage-completing tool. For example, `email` is a Slot for the Lead stage; `odometerReading` is a Slot for the Service stage. Slots are written server-side when the LLM provides them as tool arguments, and cleared when the CRM write succeeds.
+_Avoid_: Field, parameter (those are code-level terms; Slot is the domain concept of "a piece of customer information we are in the process of gathering").
+
+**Slot Bag**:
+The per-stage collection of partially-gathered Slots for a Session. `stageSlots.lead` and `stageSlots.service` are the two Slot Bags. A Slot Bag represents uncommitted, in-progress collection — it is empty when no collection is active or after a successful CRM write.
+_Avoid_: Form state, slot map.
+
+**Slot Interceptor**:
+A cross-cutting wrapper in `route.ts` that sits above every tool's `execute` function. It writes incoming tool arguments into the appropriate Slot Bag before the tool runs, and clears the Slot Bag if the tool returns `{ success: true }`. Individual tool files are not aware of its existence.
+_Avoid_: Middleware (implies an HTTP layer; the Slot Interceptor operates at the tool-dispatch layer, not the HTTP layer).
 
 **Tool**:
 A single function-calling capability exposed to the LLM (e.g. "search Lead", "create Case") that the model selects at its own discretion each turn — see [0006](./docs/adr/0006-llm-native-intent-routing.md).
