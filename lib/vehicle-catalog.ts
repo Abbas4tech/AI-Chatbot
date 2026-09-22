@@ -7,49 +7,73 @@
  * live MSRP data.
  */
 
-export type VehicleCatalogEntry = {
-  model: string;
-  variant: string;
-  priceInr: number;
+export interface VehicleCatalogEntry {
   keySpecs: string[];
-};
+  model: string;
+  priceInr: number;
+  variant: string;
+}
 
 export const vehicleCatalog: VehicleCatalogEntry[] = [
   {
+    keySpecs: [
+      "2.2L mHawk diesel, 130hp",
+      "4x4 with low-range transfer case",
+      "Convertible soft-top",
+      "5-speed manual",
+    ],
     model: "Thar",
+    priceInr: 1_650_000,
     variant: "AX (O) 4x4 Diesel MT",
-    priceInr: 1650000,
-    keySpecs: ["2.2L mHawk diesel, 130hp", "4x4 with low-range transfer case", "Convertible soft-top", "5-speed manual"],
   },
   {
+    keySpecs: [
+      "2.0L mStallion petrol, 150hp",
+      "6-speed torque-converter automatic",
+      "Hardtop",
+      "Cruise control",
+    ],
     model: "Thar",
+    priceInr: 1_450_000,
     variant: "LX 4x2 Petrol AT",
-    priceInr: 1450000,
-    keySpecs: ["2.0L mStallion petrol, 150hp", "6-speed torque-converter automatic", "Hardtop", "Cruise control"],
   },
   {
+    keySpecs: [
+      "2.2L diesel, 185hp",
+      "ADAS Level 2",
+      "7-seater",
+      "Panoramic sunroof",
+    ],
     model: "XUV700",
+    priceInr: 2_450_000,
     variant: "AX7 Diesel AT 7-Str",
-    priceInr: 2450000,
-    keySpecs: ["2.2L diesel, 185hp", "ADAS Level 2", "7-seater", "Panoramic sunroof"],
   },
   {
+    keySpecs: [
+      "2.0L turbo petrol, 200hp",
+      "5-seater",
+      "Dual 10.25-inch displays",
+    ],
     model: "XUV700",
+    priceInr: 1_500_000,
     variant: "AX5 Petrol MT 5-Str",
-    priceInr: 1500000,
-    keySpecs: ["2.0L turbo petrol, 200hp", "5-seater", "Dual 10.25-inch displays"],
   },
   {
+    keySpecs: [
+      "2.2L diesel, 172hp",
+      "4WD with terrain modes",
+      "Captain seats, 7-seater",
+      "Sky Roof",
+    ],
     model: "Scorpio-N",
+    priceInr: 2_650_000,
     variant: "Z8L Diesel 4WD AT",
-    priceInr: 2650000,
-    keySpecs: ["2.2L diesel, 172hp", "4WD with terrain modes", "Captain seats, 7-seater", "Sky Roof"],
   },
   {
-    model: "Scorpio-N",
-    variant: "Z4 Diesel MT 2WD",
-    priceInr: 1400000,
     keySpecs: ["2.2L diesel, 130hp", "2WD", "6-speed manual"],
+    model: "Scorpio-N",
+    priceInr: 1_400_000,
+    variant: "Z4 Diesel MT 2WD",
   },
 ];
 
@@ -63,11 +87,13 @@ export function lookupVehicleModel(model: string, variant?: string) {
   }
 
   const variantMatches = variant
-    ? modelMatches.filter((entry) => entry.variant.toLowerCase().includes(variant.toLowerCase()))
+    ? modelMatches.filter((entry) =>
+        entry.variant.toLowerCase().includes(variant.toLowerCase())
+      )
     : modelMatches;
 
   return {
-    found: true as const,
     entries: variantMatches.length > 0 ? variantMatches : modelMatches,
+    found: true as const,
   };
 }

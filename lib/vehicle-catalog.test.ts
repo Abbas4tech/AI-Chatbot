@@ -7,7 +7,9 @@ describe("lookupVehicleModel", () => {
     expect(result.found).toBe(true);
     if (result.found) {
       expect(result.entries.length).toBeGreaterThan(0);
-      expect(result.entries.every((entry) => entry.model === "Thar")).toBe(true);
+      expect(result.entries.every((entry) => entry.model === "Thar")).toBe(
+        true
+      );
     }
   });
 

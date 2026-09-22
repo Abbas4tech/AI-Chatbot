@@ -41,6 +41,7 @@ Build a conversational AI agent for an automotive OEM (Mahindra-style) that reco
 | UI | Tailwind CSS + shadcn/ui | Pairs directly with `useChat`'s message stream; fastest path to a professional OEM-branded look | — (low-stakes styling choice, not ADR-worthy) |
 | Package manager | pnpm | Faster installs; user preference | — |
 | Testing | Vitest, scaffolded now, real suites added alongside logic | Configuring the runner once, early, is nearly free; writing suites competes with implementation time (§2) | — |
+| Lint/format | Biome via the [Ultracite](https://ultracite.dev) preset, replacing the create-next-app default of ESLint | Single fast tool for both lint and format; Ultracite's stricter-than-default ruleset caught real issues during scaffolding (non-null assertions masking missing control-flow narrowing, un-hoisted regex literals, unstable inline JSX handlers) — see `lib/tools/search-deal.ts`/`search-booking.ts` and `app/page.tsx` | — |
 | Diagramming | Mermaid, embedded in README and this PRD | Diffable as text, renders natively on GitHub, stays in sync as the design evolves | — |
 
 ## 4. Lifecycle stage → CRM mapping

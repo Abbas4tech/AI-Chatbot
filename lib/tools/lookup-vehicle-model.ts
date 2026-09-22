@@ -7,11 +7,7 @@ export const lookupVehicleModel = tool({
   description:
     "Look up authoritative specs and pricing for a Mahindra vehicle model (XUV700, Thar, Scorpio-N). " +
     "Always call this instead of guessing a price or spec from memory.",
-  inputSchema: z.object({
-    model: z.string().describe("Vehicle model name, e.g. 'XUV700', 'Thar', 'Scorpio-N'"),
-    variant: z.string().optional().describe("Specific variant name or keyword, if the customer mentioned one"),
-  }),
-  execute: async ({ model, variant }) => {
+  execute: ({ model, variant }) => {
     const result = lookup(model, variant);
     if (!result.found) {
       return {
@@ -21,4 +17,15 @@ export const lookupVehicleModel = tool({
     }
     return result;
   },
+  inputSchema: z.object({
+    model: z
+      .string()
+      .describe("Vehicle model name, e.g. 'XUV700', 'Thar', 'Scorpio-N'"),
+    variant: z
+      .string()
+      .optional()
+      .describe(
+        "Specific variant name or keyword, if the customer mentioned one"
+      ),
+  }),
 });

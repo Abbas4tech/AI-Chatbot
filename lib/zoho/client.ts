@@ -37,7 +37,11 @@ export class ZohoApiError extends Error {
   }
 }
 
-type TokenCache = { accessToken: string; expiresAt: number };
+interface TokenCache {
+  accessToken: string;
+  expiresAt: number;
+}
+
 let tokenCache: TokenCache | null = null;
 
 // Refresh a little before actual expiry rather than reacting to a 401.
@@ -50,19 +54,19 @@ async function getAccessToken(): Promise<string> {
 
   const dc = requiredEnv("ZOHO_DC");
   const params = new URLSearchParams({
-    grant_type: "refresh_token",
     client_id: requiredEnv("ZOHO_CLIENT_ID"),
     client_secret: requiredEnv("ZOHO_CLIENT_SECRET"),
+    grant_type: "refresh_token",
     refresh_token: requiredEnv("ZOHO_REFRESH_TOKEN"),
   });
 
   const response = await fetch(`https://accounts.zoho.${dc}/oauth/v2/token`, {
-    method: "POST",
     body: params,
+    method: "POST",
   });
   const data = await response.json().catch(() => ({}));
 
-  if (!response.ok || !data.access_token) {
+  if (!(response.ok && data.access_token)) {
     throw new ZohoAuthError(data.error ?? `http_${response.status}`);
   }
 
@@ -74,7 +78,10 @@ async function getAccessToken(): Promise<string> {
   return tokenCache.accessToken;
 }
 
-async function zohoFetch<T>(path: string, init: RequestInit = {}): Promise<T | null> {
+async function zohoFetch<T>(
+  path: string,
+  init: RequestInit = {}
+): Promise<T | null> {
   const dc = requiredEnv("ZOHO_DC");
   const accessToken = await getAccessToken();
 
@@ -88,13 +95,18 @@ async function zohoFetch<T>(path: string, init: RequestInit = {}): Promise<T | n
   });
 
   // Zoho returns 204 No Content for e.g. a search with no matches.
-  if (response.status === 204) return null;
+  if (response.status === 204) {
+    return null;
+  }
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
     const zohoCode = data?.code ?? data?.data?.[0]?.code;
-    const message = data?.message ?? data?.data?.[0]?.message ?? `Zoho API request failed (${response.status})`;
+    const message =
+      data?.message ??
+      data?.data?.[0]?.message ??
+      `Zoho API request failed (${response.status})`;
     throw new ZohoApiError(message, response.status, zohoCode);
   }
 
@@ -105,31 +117,48 @@ export type ZohoRecord = Record<string, unknown> & { id: string };
 
 /** Zoho's /search endpoint criteria syntax, e.g. `(Phone:equals:+919876543210)`. */
 export const criteria = {
-  equals: (field: string, value: string | number) => `(${field}:equals:${value})`,
+  equals: (field: string, value: string | number) =>
+    `(${field}:equals:${value})`,
 };
 
 export const zoho = {
-  async searchRecords(module: string, criteriaExpr: string): Promise<ZohoRecord[]> {
+  async createRecord(
+    module: string,
+    fields: Record<string, unknown>
+  ): Promise<{ id: string }> {
+    const result = await zohoFetch<{
+      data: Array<{ details: { id: string } }>;
+    }>(`/${module}`, {
+      body: JSON.stringify({ data: [fields] }),
+      method: "POST",
+    });
+    const id = result?.data?.[0]?.details?.id;
+    if (!id) {
+      throw new ZohoApiError(
+        "Zoho did not return a record id after create",
+        500
+      );
+    }
+    return { id };
+  },
+  async searchRecords(
+    module: string,
+    criteriaExpr: string
+  ): Promise<ZohoRecord[]> {
     const result = await zohoFetch<{ data?: ZohoRecord[] }>(
       `/${module}/search?criteria=${encodeURIComponent(criteriaExpr)}`
     );
     return result?.data ?? [];
   },
 
-  async createRecord(module: string, fields: Record<string, unknown>): Promise<{ id: string }> {
-    const result = await zohoFetch<{ data: Array<{ details: { id: string } }> }>(`/${module}`, {
-      method: "POST",
-      body: JSON.stringify({ data: [fields] }),
-    });
-    const id = result?.data?.[0]?.details?.id;
-    if (!id) throw new ZohoApiError("Zoho did not return a record id after create", 500);
-    return { id };
-  },
-
-  async updateRecord(module: string, id: string, fields: Record<string, unknown>): Promise<void> {
+  async updateRecord(
+    module: string,
+    id: string,
+    fields: Record<string, unknown>
+  ): Promise<void> {
     await zohoFetch(`/${module}/${id}`, {
-      method: "PUT",
       body: JSON.stringify({ data: [{ id, ...fields }] }),
+      method: "PUT",
     });
   },
 };

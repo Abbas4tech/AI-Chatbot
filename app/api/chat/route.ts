@@ -1,5 +1,10 @@
 import { google } from "@ai-sdk/google";
-import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  type UIMessage,
+} from "ai";
 import { SYSTEM_PROMPT } from "@/lib/system-prompt";
 import { tools } from "@/lib/tools";
 
@@ -29,13 +34,13 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: google(MODEL_ID),
-    system: SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages, { tools }),
-    tools,
+    model: google(MODEL_ID),
     // Without this, streamText stops right after a tool call instead of
     // continuing on to turn the tool's result into a reply for the customer.
     stopWhen: stepCountIs(5),
+    system: SYSTEM_PROMPT,
+    tools,
   });
 
   return result.toUIMessageStreamResponse();

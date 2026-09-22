@@ -1,0 +1,15 @@
+{
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/next",
+    "ultracite/biome/vitest"
+  ],
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    // .agents/ is third-party Claude-skill content (see skills-lock.json),
+    // not this project's code — it shouldn't be linted/formatted against
+    // our rules regardless of its .gitignore status.
+    "includes": ["!.agents", "!skills-lock.json"]
+  }
+}

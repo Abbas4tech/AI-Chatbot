@@ -51,9 +51,10 @@ pnpm dev                     # http://localhost:3000
 Other useful commands:
 
 ```sh
-pnpm build   # production build + typecheck
-pnpm lint    # ESLint
-pnpm test    # Vitest
+pnpm build      # production build + typecheck
+pnpm lint       # Biome, via the Ultracite preset (ultracite check)
+pnpm lint:fix   # auto-fix what Biome can (ultracite fix)
+pnpm test       # Vitest
 ```
 
 ## Project structure

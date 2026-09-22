@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,16 +24,39 @@ export default function ChatPage() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!input.trim() || isBusy) return;
+    if (!input.trim() || isBusy) {
+      return;
+    }
     sendMessage({ text: input });
     setInput("");
   }
 
+  const handleSuggestionClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      const { suggestion } = e.currentTarget.dataset;
+      if (suggestion) {
+        sendMessage({ text: suggestion });
+      }
+    },
+    [sendMessage]
+  );
+
+  const handleRetry = useCallback(() => {
+    regenerate();
+  }, [regenerate]);
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setInput(e.target.value);
+    },
+    []
+  );
+
   return (
     <div className="mx-auto flex h-dvh max-w-3xl flex-col p-4">
       <header className="mb-4 border-b pb-4">
-        <h1 className="text-xl font-semibold">Mahindra AI Assistant</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="font-semibold text-xl">Mahindra AI Assistant</h1>
+        <p className="text-muted-foreground text-sm">
           Ask about vehicles, check your booking, or log a service request.
         </p>
       </header>
@@ -43,10 +66,11 @@ export default function ChatPage() {
           <div className="grid gap-2 pt-4">
             {SUGGESTIONS.map((suggestion) => (
               <Button
-                key={suggestion}
-                variant="outline"
                 className="h-auto justify-start whitespace-normal text-left"
-                onClick={() => sendMessage({ text: suggestion })}
+                data-suggestion={suggestion}
+                key={suggestion}
+                onClick={handleSuggestionClick}
+                variant="outline"
               >
                 {suggestion}
               </Button>
@@ -57,38 +81,53 @@ export default function ChatPage() {
         <div className="flex flex-col gap-4 pb-4">
           {messages.map((message) => (
             <div
-              key={message.id}
               className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}
+              key={message.id}
             >
               <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback>{message.role === "user" ? "You" : "AI"}</AvatarFallback>
+                <AvatarFallback>
+                  {message.role === "user" ? "You" : "AI"}
+                </AvatarFallback>
               </Avatar>
 
-              <div className={`flex max-w-[80%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}>
-                {message.parts.map((part, index) => {
+              <div
+                className={`flex max-w-[80%] flex-col gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
+              >
+                {message.parts.map((part) => {
                   if (part.type === "text") {
                     return (
                       <Card
-                        key={`${message.id}-text-${index}`}
                         className={`px-3 py-2 text-sm ${
-                          message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+                          message.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
                         }`}
+                        key={`${message.id}-text-${message.role}`}
                       >
                         {part.text}
                       </Card>
                     );
                   }
 
-                  if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+                  if (
+                    part.type.startsWith("tool-") ||
+                    part.type === "dynamic-tool"
+                  ) {
                     const toolPart = part as unknown as {
                       type: string;
+                      toolCallId: string;
                       toolName?: string;
                       state: string;
                       output?: unknown;
                     };
-                    const toolName = toolPart.toolName ?? part.type.replace("tool-", "");
+                    const toolName =
+                      toolPart.toolName ?? part.type.replace("tool-", "");
                     return (
-                      <Badge key={`${message.id}-tool-${index}`} variant="secondary" className="font-mono text-xs">
+                      <Badge
+                        className="font-mono text-xs"
+                        key={toolPart.toolCallId}
+                        variant="secondary"
+                      >
                         {toolName} · {toolPart.state}
                       </Badge>
                     );
@@ -101,27 +140,32 @@ export default function ChatPage() {
           ))}
         </div>
 
-        {error && (
+        {error ? (
           <Card className="mb-4 flex items-center justify-between gap-3 border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
             <span>
-              Something went wrong reaching the assistant. This is usually transient (e.g. the model
-              provider under high load) — try again.
+              Something went wrong reaching the assistant. This is usually
+              transient (e.g. the model provider under high load) — try again.
             </span>
-            <Button type="button" size="sm" variant="outline" onClick={() => regenerate()}>
+            <Button
+              onClick={handleRetry}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
               Retry
             </Button>
           </Card>
-        )}
+        ) : null}
       </ScrollArea>
 
-      <form onSubmit={handleSubmit} className="flex gap-2 border-t pt-4">
+      <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
         <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
           disabled={isBusy}
+          onChange={handleInputChange}
+          placeholder="Type your message..."
+          value={input}
         />
-        <Button type="submit" disabled={isBusy || !input.trim()}>
+        <Button disabled={isBusy || !input.trim()} type="submit">
           Send
         </Button>
       </form>

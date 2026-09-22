@@ -18,7 +18,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Local tooling (Claude skills), not part of the assessment submission
-.agents/
 skills-lock.json
 
 # OS
