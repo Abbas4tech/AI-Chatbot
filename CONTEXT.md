@@ -31,8 +31,8 @@ _Avoid_: Customer, owner (used informally elsewhere in this doc set, but "Contac
 ## Agent & integration
 
 **Session**:
-A server-side record keyed by an HTTP-only cookie (`mah-sid`) and held in an in-memory `Map` for the lifetime of the dev-server process. Holds stage-scoped Slot Bags — not the message log (which the client re-sends in full each turn). See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md).
-_Avoid_: Conversation (a Session includes slot/tool state, not just the message log).
+A server-side record keyed by an HTTP-only cookie (`mah-sid`) and held in an in-memory `Map` for the lifetime of the dev-server process. Holds stage-scoped Slot Bags — not the message log (which the client re-sends in full each turn, and which is separately persisted client-side in `localStorage` — see [ADR-0012](./docs/adr/0012-client-side-conversation-persistence.md)). See [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md).
+_Avoid_: Conversation (a Session includes slot/tool state, not the visible message transcript — those are two separate persistence layers, see ADR-0012).
 
 **Slot**:
 A single named field that the agent must collect before it can call a stage-completing tool. For example, `email` is a Slot for the Lead stage; `odometerReading` is a Slot for the Service stage. Slots are written server-side when the LLM provides them as tool arguments, and cleared when the CRM write succeeds.

@@ -6,13 +6,13 @@ Full design reasoning lives in [`docs/PRD.md`](./docs/PRD.md), decisions in [`do
 
 ## Status
 
-App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0011).
+App is scaffolded, architected, and functionally complete: Next.js (App Router, TypeScript, Tailwind, shadcn/ui + [AI Elements](https://ai-sdk.dev/elements)), Vercel AI SDK + Groq wired up, all 7 tools implemented against the live Zoho schema with server-side session slot tracking, client-side conversation persistence (a page reload no longer wipes the chat), and `ky` HTTP client timeouts, `pnpm build`/`pnpm lint`/`pnpm test` all clean. **Provider note**: originally built against Gemini's free tier, switched to Groq after confirming live that Gemini couldn't reliably produce a first token within 20 seconds — see [`docs/adr/0004-gemini-pro-as-llm-provider.md`](./docs/adr/0004-gemini-pro-as-llm-provider.md)'s final update and [`docs/adr/0009-groq-as-llm-provider.md`](./docs/adr/0009-groq-as-llm-provider.md). Architectural decisions are documented in [`docs/adr/`](./docs/adr/) (ADR 0001 through 0012).
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    Browser["Browser — useChat()\nmessage history in React state\nmah-sid session cookie (HTTP-only)"]
+    Browser["Browser — useChat()\nmessage history in React state,\npersisted to localStorage (ADR-0012)\nmah-sid session cookie (HTTP-only)"]
     Route["Next.js API route\n/api/chat"]
     Session["Session store (lib/session/store.ts)\nin-memory Map, keyed by mah-sid\nper-stage slot bags: lead / service"]
     Interceptor["Slot interceptor (lib/session/interceptor.ts)\nwraps createLead / createServiceCase execute()"]
@@ -43,7 +43,8 @@ flowchart TD
 
 **Request lifecycle, one message at a time:**
 
-1. Browser sends the *entire* conversation history (held client-side by `useChat`) plus the `mah-sid` session cookie to `POST /api/chat`.
+0. On first mount, the browser restores any conversation saved from a previous visit via `localStorage` ([ADR-0012](./docs/adr/0012-client-side-conversation-persistence.md)) — so a page reload mid-conversation doesn't wipe the visible chat, only a cleared browser profile or a different device does.
+1. Browser sends the *entire* conversation history (held client-side by `useChat`, and re-saved to `localStorage` on every change) plus the `mah-sid` session cookie to `POST /api/chat`.
 2. The route resolves the session — creates one and sets the cookie on the first message, looks it up on every message after.
 3. `streamText` (Vercel AI SDK) sends the history, the 7-tool schema, and the OEM system prompt to Groq. **There is no separate intent-classification step** — the LLM itself decides which of the 7 tools (if any) the message needs, which *is* the routing layer the BRD's lifecycle matrix (§2) describes.
 4. If the model calls `createLead` or `createServiceCase`, the slot interceptor writes the validated arguments into that session's stage-scoped slot bag *before* the CRM call — so partial progress (e.g. name + phone collected, email still missing) is recoverable server-side, not just implied by scrollback.
@@ -60,7 +61,7 @@ flowchart TD
 | 3. Booked Vehicle | Booking ID/phone to check delivery/allocation | `searchBooking` | Deals (stage = `Closed Won - Booking Done`) |
 | 4. Post-Purchase/Service | Complaint or service booking from an owner | `searchContactByPhone`, `createServiceCase` | Cases, linked to Contacts |
 
-Full architectural reasoning and trade-offs for every decision above live in [`docs/adr/`](./docs/adr/) — particularly [ADR-0002](./docs/adr/0002-groq-vercel-ai-sdk-orchestration.md) (orchestration choice), [ADR-0006](./docs/adr/0006-llm-native-intent-routing.md) (why routing is LLM-native, not a separate classifier), [ADR-0009](./docs/adr/0009-groq-as-llm-provider.md) (LLM provider), and [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (session store, slot state, `ky`).
+Full architectural reasoning and trade-offs for every decision above live in [`docs/adr/`](./docs/adr/) — particularly [ADR-0002](./docs/adr/0002-groq-vercel-ai-sdk-orchestration.md) (orchestration choice), [ADR-0006](./docs/adr/0006-llm-native-intent-routing.md) (why routing is LLM-native, not a separate classifier), [ADR-0009](./docs/adr/0009-groq-as-llm-provider.md) (LLM provider), [ADR-0010](./docs/adr/0010-session-store-slot-state-ky-http-client.md) (session store, slot state, `ky`), and [ADR-0012](./docs/adr/0012-client-side-conversation-persistence.md) (why the visible chat survives a page reload).
 
 ## Environment setup
 

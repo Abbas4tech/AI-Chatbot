@@ -143,6 +143,12 @@ with its own 5-second timeout and does not share the CRM instance.
   client message payload each turn; slot store is for server-side auditability and
   partial-collection tracking.
 
+## Update: the "page refresh = full session loss" problem from Context was only half-solved here
+
+This ADR's own Context section listed page refresh as one of three motivating problems, but the Decision above only ever addressed slot state — the visible message transcript itself was never persisted anywhere, client or server. That gap sat live and undocumented until a direct question surfaced it: refreshing the page really did wipe the entire visible conversation, leaving the slot bag this ADR builds as the *only* survivor — which is invisible to the user and, at the time, wasn't even read back into a new conversation.
+
+[ADR-0012](./0012-client-side-conversation-persistence.md) closes that remaining half with `localStorage` persistence of the message transcript, client-side. The two layers are complementary, not overlapping: this ADR's slot bags track *partial CRM-write progress* server-side (survives reload, not a server restart); ADR-0012 tracks the *visible transcript* client-side (survives reload, not a cleared browser). Read ADR-0012 for why message history specifically wasn't folded into this ADR's `Session` type — it's a deliberate separation, not an oversight.
+
 ## Related
 
 [ADR-0003](./0003-zoho-rest-sync-in-memory-session.md) — this ADR supersedes the
