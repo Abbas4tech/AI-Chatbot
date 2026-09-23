@@ -132,7 +132,13 @@ confirming the case with a reference number.
 
 Confirm the Contact was auto-created (`First_Name=Suresh`, `Last_Name=Kumar`),
 and the Case has `Odometer_Reading=15000`, `Preferred_Service_Center` mentioning
-Koramangala, and `Contact_Name.id` matching the Contact's `id`.
+Koramangala, and **`Related_To.id`** matching the Contact's `id` — not
+`Contact_Name`, which isn't a real field on Zoho's Cases module (verified via
+`/settings/fields?module=Cases`; the actual Contact lookup there is
+`Related_To`). `createServiceCase` wrote to `Contact_Name` for a while, which
+Zoho silently dropped rather than erroring — every Case created before this
+fix has `Related_To: null` even though the Contact itself was created
+correctly. See [ADR-0013](../adr/0013-cases-contact-lookup-field-name-bug.md).
 
 **Follow-up prompt** (triggers `searchContactByPhone`, confirms identity
 resolution works standalone too, not just inside `createServiceCase`):
