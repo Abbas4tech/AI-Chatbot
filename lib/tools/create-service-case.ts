@@ -48,11 +48,11 @@ export const createServiceCase = tool({
       }
 
       const { id: caseId } = await zoho.createRecord(ZOHO_MODULES.CASES, {
-        Contact_Name: { id: contactId },
         Description: issueDescription,
         Odometer_Reading: odometerReading,
         Preferred_Service_Center: preferredCenter,
         Registration_Number: registrationNumber,
+        Related_To: { id: contactId },
         Subject: `${serviceType} - ${registrationNumber}`,
       });
 
